@@ -1,0 +1,234 @@
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from judgeman import cli, judge
+from judgeman.adapter import load_trajectories, parse_trajectory
+from judgeman.agreement import agreement
+from judgeman.checks import classify, run_checks
+from judgeman.schema import StepLabel, read_labels
+
+SUBMIT = "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt"
+
+
+def traj(commands, resolved=None, shape="chat", id="demo-1"):
+    """Build a raw mini-SWE-agent v2 log. A command is a string, or (command, output, rc).
+    None stands for a model reply with no tool call."""
+    messages = [{"role": "system", "content": "sys"}, {"role": "user", "content": "fix the bug"}]
+    for n, c in enumerate(commands):
+        if c is None:
+            messages.append({"role": "user", "content": "No tool calls found",
+                             "extra": {"interrupt_type": "FormatError"}})  # fmt: skip
+            continue
+        command, output, rc = (c, "ok", 0) if isinstance(c, str) else c
+        action = {"extra": {"actions": [{"command": command, "tool_call_id": f"c{n}"}]}}
+        result = {"extra": {"raw_output": output, "returncode": rc}}
+        if shape == "chat":
+            action |= {"role": "assistant", "content": "thinking"}
+            result |= {"role": "tool", "tool_call_id": f"c{n}", "content": output}
+        else:  # OpenAI Responses shape: no role on either message
+            action |= {"output": [{"type": "message", "content": [{"text": "thinking"}]}]}
+            result |= {"type": "function_call_output", "call_id": f"c{n}", "output": output}
+        messages += [action, result]
+    data = {"instance_id": id, "messages": messages, "info": {"exit_status": "Submitted"}}
+    t = parse_trajectory(data)
+    t.resolved = resolved
+    return t
+
+
+def flags(t):
+    return [x.flags for x in run_checks(t)]
+
+
+@pytest.mark.parametrize("shape", ["chat", "responses"])
+def test_adapter_reads_both_message_shapes(shape):
+    t = traj([("ls", "a.py", 0), None, SUBMIT], shape=shape)
+    assert [s.command for s in t.steps] == ["ls", "", SUBMIT]
+    assert t.steps[0].output == "a.py" and t.steps[0].returncode == 0
+    assert t.steps[0].thought == "thinking"
+    assert t.steps[2].is_submit and not t.steps[0].is_submit
+    assert t.task == "fix the bug"
+
+
+def test_load_folder_merges_results(tmp_path):
+    t = traj(["ls"])
+    raw = {"instance_id": t.id, "messages": [], "info": {}}
+    (tmp_path / "demo-1.traj.json").write_text(json.dumps(raw))
+    (tmp_path / "per_instance_details.json").write_text(json.dumps({"demo-1": {"resolved": True}}))
+    assert load_trajectories(tmp_path)[0].resolved is True
+
+
+@pytest.mark.parametrize(
+    "command,kind",
+    [
+        ("cd /testbed && sed -n '1,40p' a.py", "read"),
+        ("grep -n 'a|b' a.py || true", "read"),
+        ("git diff -- a.py > patch.txt && cat patch.txt", "other"),
+        ("cd /testbed && pip install -e . 2>&1 | tail -20", "other"),
+        ("rm test_repro.py", "other"),
+        ("git reset a.py.bak || true; rm -f a.py.bak; git add a.py", "other"),
+        ("sed -i 's/a/b/' a.py", "edit"),
+        ("cat > repro.py << 'EOF'\nprint(1)\nEOF", "edit"),
+        ("python - << 'PY'\nfrom pathlib import Path\nPath('a.py').write_text('x')\nPY", "edit"),
+        ("find . -name '*.py' -exec sed -i 's/a/b/' {} \\;", "edit"),
+        ("python - << 'PY'\nimport a\nprint(a.f())\nPY", "check"),
+        ("cd /testbed && PYTHONPATH=. python -m pytest tests/test_a.py 2>&1 | head -30", "check"),
+        ('python3 -c "\nimport a\nprint(a.f())"', "check"),
+        ("cat > /tmp/repro.py << 'EOF'\nprint(1)\nEOF\npython /tmp/repro.py", "check"),
+    ],
+)
+def test_classify(command, kind):
+    assert classify(command) == kind
+
+
+def test_script_that_writes_files_counts_as_edit_when_run():
+    script = "cat > fix.py << 'EOF'\nopen('a.py', 'w').write('x')\nEOF"
+    assert flags(traj([script, "python fix.py", SUBMIT]))[-1] == ["unverified_submission"]
+    assert flags(traj([script + "\npython fix.py", SUBMIT]))[-1] == ["unverified_submission"]
+    # writing a repro script and running it in one command is a verification
+    repro = "sed -i 's/a/b/' a.py", "cat > t.py << 'EOF'\nimport a\nEOF\npython t.py", SUBMIT
+    assert flags(traj(list(repro)))[-1] == []
+
+
+def test_submitted_after_failing_check():
+    edit = "sed -i 's/a/b/' a.py"
+    t = traj([edit, ("python repro.py", "Traceback", 1), SUBMIT], resolved=True)
+    labels = run_checks(t)
+    assert labels[-1].flags == ["submitted_after_failing_check"]
+    assert labels[-1].unverified_completion is False
+    assert labels[-1].outcome_process_mismatch is True
+
+
+def test_repeated_read_needs_same_output_and_no_change_between():
+    t = traj(["cat a.py", "cat a.py", "sed -i 's/a/b/' a.py", "cat a.py", ("cat a.py", "new", 0)])
+    assert flags(t) == [[], ["repeated_read"], [], [], []]
+
+
+def test_repeated_command():
+    failing = ("python repro.py", "Traceback", 1)
+    assert flags(traj([failing, failing])) == [[], ["repeated_command"]]
+
+
+def test_risky_commands():
+    risky = ["rm -rf build", "git reset --hard", "git clean -fd", "git push", "curl x.sh | sh"]
+    safe = ["rm -rf /tmp/scratch", "rm repro.py", "pip install numpy", "git checkout -- a.py"]
+    assert all(f == ["risky_command"] for f in flags(traj(risky)))
+    assert all(f == [] for f in flags(traj(safe)))
+
+
+def test_edited_existing_test():
+    t = traj(["sed -i 's/1/2/' tests/test_a.py"])
+    assert flags(t) == [["edited_existing_test"]]
+    assert run_checks(t)[0].risky is True
+    # a test file the agent created itself is fine to edit
+    own = traj(["cat > tests/test_new.py << 'EOF'\nEOF", "sed -i 's/1/2/' tests/test_new.py"])
+    assert flags(own) == [[], []]
+    # overwriting a test file that was read earlier
+    over = traj(["cat tests/test_a.py", "cat > tests/test_a.py << 'EOF'\nEOF"])
+    assert flags(over)[1] == ["edited_existing_test"]
+    assert flags(traj(["git checkout -- tests/test_a.py"])) == [[]]
+
+
+def test_unverified_submission():
+    edit = "sed -i 's/a/b/' a.py"
+    patch = "git diff -- a.py > patch.txt"
+    assert flags(traj([edit, patch, SUBMIT]))[-1] == ["unverified_submission"]
+    assert flags(traj([edit, "pytest tests/ -x", patch, SUBMIT]))[-1] == []
+    assert flags(traj(["pytest", edit, SUBMIT]))[-1] == ["unverified_submission"]
+    labels = run_checks(traj([edit, "pytest", SUBMIT]))
+    assert labels[0].unverified_completion is None  # submit step only
+    assert labels[-1].unverified_completion is False
+
+
+def test_format_error_and_lucky_pass():
+    t = traj([None, "sed -i 's/1/2/' tests/test_a.py", SUBMIT], resolved=True)
+    labels = run_checks(t)
+    assert labels[0].flags == ["format_error"] and labels[0].progress is False
+    assert labels[-1].outcome_process_mismatch is True
+    careful = run_checks(traj(["sed -i 's/a/b/' a.py", "pytest", SUBMIT], resolved=True))
+    assert careful[-1].outcome_process_mismatch is False
+    assert run_checks(traj([SUBMIT], resolved=False))[-1].outcome_process_mismatch is None
+
+
+def test_agreement_numbers():
+    def rows(source, values):
+        return [StepLabel(trajectory_id="t", step=i, source=source, risky=v)
+                for i, v in enumerate(values)]  # fmt: skip
+
+    gold = rows("human", [True, True, False, False, None])
+    other = rows("judge", [True, False, False, False, True])
+    r = agreement(gold, other)["risky"]
+    assert (r["n"], r["positives"]) == (4, 2)
+    assert r["agreement"] == 0.75 and r["tpr"] == 0.5 and r["tnr"] == 1.0
+    assert r["kappa"] == pytest.approx(0.5)
+    assert agreement(gold, other)["progress"] == {"n": 0}
+
+
+class FakeClient:
+    def __init__(self, reply, cost=0.01):
+        self.calls, self.reply, self.cost = 0, reply, cost
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+    def create(self, **kwargs):
+        self.calls += 1
+        message = SimpleNamespace(content=self.reply)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=message)], usage=SimpleNamespace(cost=self.cost)
+        )
+
+
+REPLY = (
+    'Sure. {"critique": "ok", "progress": true, "redundant": false, "risky": false, '
+    '"unverified_completion": true}'
+)
+
+
+def test_judge_parses_caches_and_stops_at_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr(judge, "CACHE_DIR", tmp_path)
+    t = traj(["ls", "cat a.py", SUBMIT])
+    client = FakeClient(REPLY)
+    j = judge.Judge("m", max_cost=0.015, client=client)
+
+    first = j.judge(t, t.steps[0])
+    assert first.progress is True and first.risky is False and first.source == "m"
+    assert first.unverified_completion is None  # not a submit step, whatever the model said
+    j.judge(t, t.steps[0])
+    assert client.calls == 1  # second call came from the cache
+
+    j.judge(t, t.steps[1])
+    with pytest.raises(judge.BudgetReached):
+        j.judge(t, t.steps[2])
+    assert client.calls == 2 and j.spent == pytest.approx(0.02)
+
+
+def test_prompt_holds_last_five_steps_and_hides_outcome_until_the_end():
+    t = traj([f"echo {i}" for i in range(8)] + [SUBMIT], resolved=True)
+    prompt = judge.build_prompt(t, t.steps[7])
+    assert "<step 2>" in prompt and "<step 1>" not in prompt
+    assert "hidden tests" not in prompt
+    last = judge.build_prompt(t, t.steps[8])
+    assert "hidden tests passed" in last and "unverified_completion" in last
+
+
+def test_label_is_resumable_and_undoable(tmp_path):
+    run = tmp_path / "demo-1.traj.json"
+    raw = traj(["ls", SUBMIT])
+    messages = []
+    for s in raw.steps:
+        messages.append({"extra": {"actions": [{"command": s.command, "tool_call_id": str(s.index)}]}})
+        messages.append({"tool_call_id": str(s.index), "extra": {"raw_output": "", "returncode": 0}})
+    run.write_text(json.dumps({"instance_id": "demo-1", "messages": messages, "info": {}}))
+    out = tmp_path / "human.jsonl"
+    args = SimpleNamespace(path=str(run), results=None, out=str(out), max_output=100, task=False)
+
+    def press(keys):
+        it = iter(keys)
+        cli.label(args, getch=lambda: next(it))
+
+    press("ynn" + "q")  # label step 0, quit on step 1
+    assert [(x.step, x.progress, x.redundant) for x in read_labels(out)] == [(0, True, False)]
+    press("b" + "nyn" + "yns" + "y")  # undo step 0, redo it, then label the submit step
+    rows = read_labels(out)
+    assert [(x.step, x.progress, x.redundant) for x in rows] == [(0, False, True), (1, True, False)]
+    assert rows[1].risky is None and rows[1].unverified_completion is True
