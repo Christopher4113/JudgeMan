@@ -51,6 +51,13 @@ def test_adapter_reads_both_message_shapes(shape):
     assert t.task == "fix the bug"
 
 
+def test_task_is_the_pr_description_without_agent_instructions():
+    head = "<pr_description>\nConsider the following PR description:\n"
+    content = head + "Fix crash\nDetails\n</pr_description>\n<instructions>x"
+    data = {"messages": [{"role": "user", "content": content}]}
+    assert parse_trajectory(data).task == "Fix crash\nDetails"
+
+
 def test_load_folder_merges_results(tmp_path):
     t = traj(["ls"])
     raw = {"instance_id": t.id, "messages": [], "info": {}}
@@ -226,9 +233,20 @@ def test_label_is_resumable_and_undoable(tmp_path):
         it = iter(keys)
         cli.label(args, getch=lambda: next(it))
 
-    press("ynn" + "q")  # label step 0, quit on step 1
+    press("\n" + "q")  # step 0 is fine, quit on step 1
     assert [(x.step, x.progress, x.redundant) for x in read_labels(out)] == [(0, True, False)]
-    press("b" + "nyn" + "yns" + "y")  # undo step 0, redo it, then label the submit step
+    # undo step 0, mark it wasted + repeat, toggle dangerous on and off; then the submit step
+    press("b" + "wrdd\n" + "u\n")  # no outcome known, so no mismatch round
     rows = read_labels(out)
     assert [(x.step, x.progress, x.redundant) for x in rows] == [(0, False, True), (1, True, False)]
-    assert rows[1].risky is None and rows[1].unverified_completion is True
+    assert rows[0].risky is False and rows[0].unverified_completion is None
+    assert rows[1].unverified_completion is True
+    (tmp_path / "per_instance_details.json").write_text(json.dumps({"demo-1": {"resolved": True}}))
+    args.results = str(tmp_path / "per_instance_details.json")
+    args.out = str(tmp_path / "mismatch.jsonl")
+    press("\n" + "u\n" + "m\n")  # outcome is asked in a second round, after the step is judged
+    last = read_labels(tmp_path / "mismatch.jsonl")[1]
+    assert last.unverified_completion is True and last.outcome_process_mismatch is True
+    args.out = str(tmp_path / "skip.jsonl")
+    press("s" + "q")  # a skipped step leaves every axis empty
+    assert read_labels(tmp_path / "skip.jsonl")[0].progress is None

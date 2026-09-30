@@ -6,3 +6,4 @@ dist/
 .ruff_cache/
 .judgeman/
 runs/
+.env

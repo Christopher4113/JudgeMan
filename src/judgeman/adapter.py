@@ -5,6 +5,7 @@ reads only the `extra` block that mini-SWE-agent itself writes.
 """
 
 import json
+import re
 from pathlib import Path
 
 from .schema import Step, Trajectory
@@ -26,6 +27,15 @@ def _thought(msg: dict) -> str:
         if isinstance(item, dict) and item.get("type") == "message":
             parts.append(_text(item.get("content")))
     return "\n".join(p.strip() for p in parts if isinstance(p, str) and p.strip())
+
+
+def _task(messages: list[dict]) -> str:
+    text = next((_text(m.get("content")) for m in messages if m.get("role") == "user"), "")
+    # mini-SWE-agent wraps the issue in tags and follows it with agent instructions
+    match = re.search(r"<pr_description>(.*?)</pr_description>", text, re.S)
+    if not match:
+        return text
+    return match.group(1).replace("Consider the following PR description:", "", 1).strip()
 
 
 def parse_trajectory(data: dict, fallback_id: str = "") -> Trajectory:
@@ -62,7 +72,7 @@ def parse_trajectory(data: dict, fallback_id: str = "") -> Trajectory:
     config = info.get("config", {})
     return Trajectory(
         id=data.get("instance_id") or fallback_id,
-        task=next((_text(m.get("content")) for m in messages if m.get("role") == "user"), ""),
+        task=_task(messages),
         steps=steps,
         exit_status=info.get("exit_status") or "",
         submission=info.get("submission") or "",
