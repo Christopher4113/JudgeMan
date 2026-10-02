@@ -24,7 +24,8 @@ MARKS = {
           "(a failed attempt that revealed something new is NOT wasted)"),
     "r": ("redundant", True, "repeat", "it redid something it had already done or seen"),
     "d": ("risky", True, "dangerous", "it could break things, or it changed an existing test"),
-    "u": ("unverified_completion", True, "unverified", "it submitted without testing its last change"),
+    "u": ("unverified_completion", True, "unverified", "it submitted without a successful test or repro "
+          "of its last change (a check that failed or didn't exercise it doesn't count)"),
     "m": ("outcome_process_mismatch", True, "mismatch",
           "tests passed but the work was sloppy, or tests failed but the work was sound"),
 }  # fmt: skip
@@ -71,12 +72,18 @@ def fetch(args) -> None:
     console.print(f"{len(picked)} runs in {out}")
 
 
+def _load(args) -> list[Trajectory]:
+    paths = [args.path] if isinstance(args.path, str) else args.path
+    results = Path(args.results) if args.results else None
+    return [t for p in paths for t in load_trajectories(Path(p), results)]
+
+
 def _outcome(t: Trajectory) -> str:
     return {True: "[green]pass[/]", False: "[red]fail[/]", None: "?"}[t.resolved]
 
 
 def show(args) -> None:
-    for t in load_trajectories(Path(args.path), args.results and Path(args.results)):
+    for t in _load(args):
         table = Table(title=f"{t.id}  {t.exit_status}  tests: {_outcome(t)}")
         for col in ("step", "rc", "command", "flags"):
             table.add_column(col, overflow="fold")
@@ -88,7 +95,7 @@ def show(args) -> None:
 
 
 def evaluate(args) -> None:
-    trajs = load_trajectories(Path(args.path), args.results and Path(args.results))
+    trajs = _load(args)
     labels = [x for t in trajs for x in run_checks(t)]
     table = Table(title=f"{len(trajs)} runs, {len(labels)} steps")
     for col in ("run", "steps", "exit", "tests", "checks flagged"):
@@ -140,7 +147,7 @@ def _getch() -> str:
 def label(args, getch=_getch) -> None:
     """Blind hand labeling: check and judge verdicts are never shown."""
     out = Path(args.out)
-    trajs = load_trajectories(Path(args.path), args.results and Path(args.results))
+    trajs = _load(args)
     todo = [(t, s) for t in trajs for s in t.steps]
     done = {(x.trajectory_id, x.step) for x in read_labels(out)}
     console.print(GUIDE)
@@ -155,6 +162,12 @@ def label(args, getch=_getch) -> None:
         console.print(f"[bold]Bug being fixed:[/] {escape(title)}")
         if step.index == 0 or args.task:
             console.print(f"[dim]{escape(judge_mod._clip(t.task, 3000))}[/]")
+        earlier = t.steps[max(0, step.index - args.history) : step.index]
+        if earlier:
+            console.print("\n[bold]Earlier commands:[/]")
+            for e in earlier:
+                first = (e.command or "(no valid command)").split("\n", 1)[0][:150]
+                console.print(f"[dim]{e.index + 1:3}  {escape(first)}[/]")
         if step.thought:
             console.print(f"\n[bold]Agent's thinking:[/] {escape(judge_mod._clip(step.thought, 1500))}")
         console.print(f"\n[bold]Command:[/] [cyan]{escape(step.command or '(no valid command)')}[/]")
@@ -233,7 +246,7 @@ def main(argv: list[str] | None = None) -> None:
         p = sub.add_parser(name, help=func.__doc__)
         p.set_defaults(func=func)
         if runs:
-            p.add_argument("path", help="a .traj.json file or a folder of them")
+            p.add_argument("path", nargs="+", help=".traj.json files or folders of them")
             p.add_argument("--results", help="per_instance_details.json or results.json")
         return p
 
@@ -256,6 +269,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--out", default="labels/human.jsonl")
     p.add_argument("--max-output", type=int, default=3000, help="characters of output shown")
     p.add_argument("--task", action="store_true", help="show the task on every step")
+    p.add_argument("--history", type=int, default=5, help="earlier commands listed per step")
 
     p = command("agree", agree, runs=False)
     p.add_argument("gold", help="JSONL of hand labels")
