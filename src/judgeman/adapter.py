@@ -70,13 +70,16 @@ def parse_trajectory(data: dict, fallback_id: str = "") -> Trajectory:
             )
 
     config = info.get("config", {})
+    model = str(config.get("model", {}).get("model_name", ""))
+    instance = data.get("instance_id") or fallback_id
     return Trajectory(
-        id=data.get("instance_id") or fallback_id,
+        # the same task is attempted by several models, so the model is part of the id
+        id=f"{instance}@{model}" if model else instance,
         task=_task(messages),
         steps=steps,
         exit_status=info.get("exit_status") or "",
         submission=info.get("submission") or "",
-        model=str(config.get("model", {}).get("model_name", "")),
+        model=model,
     )
 
 
@@ -92,12 +95,13 @@ def load_results(path: Path) -> dict[str, bool]:
 
 def load_trajectories(path: Path, results: Path | None = None) -> list[Trajectory]:
     files = sorted(path.rglob("*.traj.json")) if path.is_dir() else [path]
-    if results is None and path.is_dir() and (path / "per_instance_details.json").exists():
-        results = path / "per_instance_details.json"
+    beside = (path if path.is_dir() else path.parent) / "per_instance_details.json"
+    if results is None and beside.exists():
+        results = beside
     resolved = load_results(results) if results else {}
     trajs = []
     for f in files:
         t = parse_trajectory(json.loads(f.read_text()), fallback_id=f.name.split(".")[0])
-        t.resolved = resolved.get(t.id)
+        t.resolved = resolved.get(t.id.split("@")[0])
         trajs.append(t)
     return trajs
