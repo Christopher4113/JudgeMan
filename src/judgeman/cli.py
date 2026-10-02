@@ -40,6 +40,9 @@ Pressing a letter again turns it off. There are no right answers to guess: it is
 """
 
 
+MIN_PER_CLASS = 10  # below this, kappa and the rates swing on one or two labels
+
+
 def _get(url: str) -> bytes:
     with urllib.request.urlopen(url, timeout=60) as r:
         return r.read()
@@ -121,6 +124,8 @@ def evaluate(args) -> None:
                         console.print(f"[red]unparseable verdict[/] {t.id} step {step.index}")
         except judge_mod.BudgetReached:
             console.print(f"[red]budget cap ${args.max_cost} reached, keeping partial results[/]")
+        except Exception as e:  # API failure mid-run: what is cached and labeled so far is kept
+            console.print(f"[red]judge stopped: {escape(str(e)[:300])}[/]")
         console.print(f"spent ${judge.spent:.4f}")
     if args.out:
         write_labels(Path(args.out), labels)
@@ -228,14 +233,20 @@ def agree(args) -> None:
         table = Table(title=f"{source} vs {args.gold}")
         for col in ("axis", "n", "positives", "agreement", "kappa", "TPR", "TNR"):
             table.add_column(col)
+        thin_axes: list[str] = []
         for axis, r in report.items():
             if not r["n"]:
                 table.add_row(axis, "0", *["-"] * 5)
                 continue
             nums = [r[k] for k in ("agreement", "kappa", "tpr", "tnr")]
-            table.add_row(axis, str(r["n"]), str(r["positives"]),
+            thin = min(r["positives"], r["n"] - r["positives"]) < MIN_PER_CLASS
+            thin_axes += [axis] if thin else []
+            table.add_row(axis + (" [yellow]*[/]" if thin else ""), str(r["n"]), str(r["positives"]),
                           *("-" if v is None else f"{v:.2f}" for v in nums))  # fmt: skip
         console.print(table)
+        if thin_axes:
+            console.print(f"[yellow]* fewer than {MIN_PER_CLASS} yes or {MIN_PER_CLASS} no labels: "
+                          f"too few to measure, treat the numbers as unknown[/]")  # fmt: skip
 
 
 def main(argv: list[str] | None = None) -> None:
