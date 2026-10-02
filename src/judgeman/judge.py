@@ -111,6 +111,7 @@ class Judge:
                 ],
                 response_format={"type": "json_object"},
                 temperature=0,
+                max_tokens=1000,  # unset, providers reserve credit for their full output limit
             )
             reply = response.choices[0].message.content or ""
             # ponytail: relies on the provider reporting usage.cost (OpenRouter does).

@@ -61,6 +61,16 @@ All yes/no. A missing value means the axis does not apply to that step.
 
 The checks are tuned to rarely fire wrongly, even if they miss things.
 
+## Known gaps
+
+- `risky` is unmeasured. In 516 hand-labeled steps from sandboxed SWE-bench runs there are no
+  dangerous steps, so no judge or check has been scored on it. Seven steps were first labeled
+  dangerous (five were `git add -A`) and relabeled as fine: staging everything is sloppy, and it
+  causes empty patches later, but it is not destructive. Measuring this axis needs injected
+  mistakes or a less constrained agent.
+- `judgeman agree` marks an axis with `*` when it has fewer than 10 yes or 10 no labels. Treat
+  those numbers as unknown.
+
 ## Develop
 
 ```bash

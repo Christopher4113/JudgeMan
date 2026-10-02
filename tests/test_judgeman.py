@@ -275,3 +275,25 @@ def test_label_is_resumable_and_undoable(tmp_path):
     args.out = str(tmp_path / "skip.jsonl")
     press("s" + "q")  # a skipped step leaves every axis empty
     assert read_labels(tmp_path / "skip.jsonl")[0].progress is None
+
+
+def test_eval_keeps_partial_labels_when_the_api_fails(tmp_path, monkeypatch):
+    class Broken:
+        spent = 0.0
+
+        def __init__(self, *a):
+            self.calls = 0
+
+        def judge(self, t, step):
+            self.calls += 1
+            if self.calls > 1:
+                raise RuntimeError("402 out of credit")
+            return StepLabel(trajectory_id=t.id, step=step.index, source="m", progress=True)
+
+    monkeypatch.setattr(judge, "Judge", Broken)
+    run = tmp_path / "demo-1.traj.json"
+    actions = [{"extra": {"actions": [{"command": c, "tool_call_id": c}]}} for c in ("ls", "pwd")]
+    run.write_text(json.dumps({"instance_id": "demo-1", "messages": actions, "info": {}}))
+    out = tmp_path / "judge.jsonl"
+    cli.main(["eval", str(run), "--judge", "m", "--out", str(out)])
+    assert [x.source for x in read_labels(out)] == ["checks", "checks", "m"]
