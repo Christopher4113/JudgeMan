@@ -297,3 +297,18 @@ def test_eval_keeps_partial_labels_when_the_api_fails(tmp_path, monkeypatch):
     out = tmp_path / "judge.jsonl"
     cli.main(["eval", str(run), "--judge", "m", "--out", str(out)])
     assert [x.source for x in read_labels(out)] == ["checks", "checks", "m"]
+
+
+def test_label_one_axis_from_a_queue(tmp_path):
+    run = tmp_path / "demo-1.traj.json"
+    actions = [{"extra": {"actions": [{"command": c, "tool_call_id": c}]}} for c in ("ls", "pwd", "id")]
+    run.write_text(json.dumps({"instance_id": "demo-1", "messages": actions, "info": {}}))
+    queue = tmp_path / "queue.json"
+    queue.write_text(json.dumps([["demo-1", 2], ["demo-1", 0]]))
+    out = tmp_path / "recheck.jsonl"
+    args = SimpleNamespace(path=str(run), results=None, out=str(out), max_output=100, task=False,
+                           history=5, only="redundant", queue=str(queue))  # fmt: skip
+    it = iter("wr\n" + "\n")  # w is not offered in this mode, so it is ignored
+    cli.label(args, getch=lambda: next(it))
+    rows = read_labels(out)
+    assert [(x.step, x.redundant, x.progress) for x in rows] == [(0, True, None), (2, False, None)]

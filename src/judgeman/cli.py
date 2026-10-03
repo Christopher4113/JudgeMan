@@ -14,7 +14,7 @@ from . import judge as judge_mod
 from .adapter import load_trajectories
 from .agreement import agreement
 from .checks import run_checks
-from .schema import StepLabel, Trajectory, applicable, read_labels, write_labels
+from .schema import AXES, StepLabel, Trajectory, applicable, read_labels, write_labels
 
 console = Console()
 EXPERIMENTS = "https://raw.githubusercontent.com/SWE-bench/experiments/main/evaluation/verified"
@@ -179,6 +179,9 @@ def label(args, getch=_getch) -> None:
     out = Path(args.out)
     trajs = _load(args)
     todo = [(t, s) for t in trajs for s in t.steps]
+    if getattr(args, "queue", None):  # re-judge only the listed [run id, step] pairs
+        wanted = {(k[0], k[1]) for k in json.loads(Path(args.queue).read_text())}
+        todo = [(t, s) for t, s in todo if (t.id, s.index) in wanted]
     done = {(x.trajectory_id, x.step) for x in read_labels(out)}
     console.print(GUIDE)
     i = 0
@@ -206,7 +209,8 @@ def label(args, getch=_getch) -> None:
         console.print(escape(judge_mod._clip(step.output, args.max_output)))
 
         axes = applicable(t, step)
-        keys = {k: v for k, v in MARKS.items() if v[0] in axes}
+        only = getattr(args, "only", None)
+        keys = {k: v for k, v in MARKS.items() if v[0] in axes and only in (None, v[0])}
         console.print()
         # the outcome is revealed only after the step itself is judged, so it can't sway that
         rounds = [{k: v for k, v in keys.items() if k != "m"}]
@@ -308,6 +312,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--max-output", type=int, default=3000, help="characters of output shown")
     p.add_argument("--task", action="store_true", help="show the task on every step")
     p.add_argument("--history", type=int, default=5, help="earlier commands listed per step")
+    p.add_argument("--only", choices=AXES, help="ask about this one axis, leave the others empty")
+    p.add_argument("--queue", help="JSON list of [run id, step] pairs to label, skipping the rest")
 
     p = command("agree", agree, runs=False)
     p.add_argument("gold", help="JSONL of hand labels")
