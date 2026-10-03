@@ -4,6 +4,7 @@ import random
 import re
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from rich.console import Console
@@ -22,7 +23,8 @@ EXPERIMENTS = "https://raw.githubusercontent.com/SWE-bench/experiments/main/eval
 MARKS = {
     "w": ("progress", False, "wasted", "it produced nothing the agent could use "
           "(a failed attempt that revealed something new is NOT wasted)"),
-    "r": ("redundant", True, "repeat", "it redid something it had already done or seen"),
+    "r": ("redundant", True, "repeat", "it only showed content already seen (same lines, or same "
+          "command and result) with nothing changed in between"),
     "d": ("risky", True, "dangerous", "it could break things, or it changed an existing test"),
     "u": ("unverified_completion", True, "unverified", "it submitted without a successful test or repro "
           "of its last change (a check that failed or didn't exercise it doesn't count)"),
@@ -135,23 +137,42 @@ def evaluate(args) -> None:
     console.print(table)
 
     if args.judge:
-        calls, tokens = judge_mod.estimate_tokens(trajs)
-        console.print(f"judge {args.judge}: {calls} calls, about {tokens:,} prompt tokens")
+        pairs = [(t, s) for t in trajs for s in t.steps]
+        if args.queue:  # judge only the listed [run id, step] pairs
+            wanted = {(k[0], k[1]) for k in json.loads(Path(args.queue).read_text())}
+            pairs = [(t, s) for t, s in pairs if (t.id, s.index) in wanted]
+        calls, tokens = judge_mod.estimate_tokens(pairs, args.context)
+        console.print(f"judge {args.judge} ({args.context}): {calls} calls, about {tokens:,} prompt tokens")
         if args.dry_run:
             return
-        judge = judge_mod.Judge(args.judge, args.max_cost)
+        judge = judge_mod.Judge(
+            args.judge, args.max_cost, context=args.context, thinking=not args.no_thinking
+        )
+
+        def one(pair):
+            try:
+                return judge.judge(*pair)
+            except (json.JSONDecodeError, ValueError):
+                return None
+            except Exception as e:  # one request that never answers is skipped, not fatal
+                if type(e).__name__ != "APITimeoutError":
+                    raise
+                return None
+
+        pool = ThreadPoolExecutor(args.workers)
         try:
-            for t in trajs:
-                for step in t.steps:
-                    try:
-                        labels.append(judge.judge(t, step))
-                    except (json.JSONDecodeError, ValueError):
-                        console.print(f"[red]unparseable verdict[/] {t.id} step {step.index}")
+            for (t, step), verdict in zip(pairs, pool.map(one, pairs), strict=True):
+                if verdict is None:
+                    console.print(f"[red]no usable verdict[/] {t.id} step {step.index}")
+                else:
+                    labels.append(verdict)
         except judge_mod.BudgetReached:
             console.print(f"[red]budget cap ${args.max_cost} reached, keeping partial results[/]")
         except Exception as e:  # API failure mid-run: what is cached and labeled so far is kept
             console.print(f"[red]judge stopped: {escape(str(e)[:300])}[/]")
-        console.print(f"spent ${judge.spent:.4f}")
+        pool.shutdown(cancel_futures=True)  # after a stop, calls not yet started are dropped
+        pace = f", {judge.seconds / judge.calls:.1f}s per call" if judge.calls else ""
+        console.print(f"spent ${judge.spent:.4f} on {judge.calls} new calls{pace}")
     if args.out:
         write_labels(Path(args.out), labels)
         console.print(f"wrote {len(labels)} labels to {args.out}")
@@ -305,6 +326,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--judge", help="model name, e.g. openai/gpt-5-mini")
     p.add_argument("--max-cost", type=float, default=0.10, help="dollar cap for this command")
     p.add_argument("--dry-run", action="store_true", help="estimate tokens, spend nothing")
+    p.add_argument("--context", choices=judge_mod.CONTEXTS, default="last5", help="what the judge sees")
+    p.add_argument("--queue", help="JSON list of [run id, step] pairs to judge, skipping the rest")
+    p.add_argument("--workers", type=int, default=1, help="judge calls in flight at once")
+    p.add_argument("--no-thinking", action="store_true", help="turn off the model's hidden reasoning")
     p.add_argument("--out", help="write StepLabel rows to this JSONL file")
 
     p = command("label", label)

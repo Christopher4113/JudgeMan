@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from judgeman import cli, judge
-from judgeman.adapter import load_trajectories, parse_trajectory
+from judgeman.adapter import dump_trajectory, load_trajectories, parse_trajectory
 from judgeman.agreement import agreement
 from judgeman.checks import classify, run_checks
 from judgeman.schema import StepLabel, read_labels
@@ -279,9 +279,9 @@ def test_label_is_resumable_and_undoable(tmp_path):
 
 def test_eval_keeps_partial_labels_when_the_api_fails(tmp_path, monkeypatch):
     class Broken:
-        spent = 0.0
+        spent = seconds = 0.0
 
-        def __init__(self, *a):
+        def __init__(self, *a, **kw):
             self.calls = 0
 
         def judge(self, t, step):
@@ -312,3 +312,34 @@ def test_label_one_axis_from_a_queue(tmp_path):
     cli.label(args, getch=lambda: next(it))
     rows = read_labels(out)
     assert [(x.step, x.redundant, x.progress) for x in rows] == [(0, True, None), (2, False, None)]
+
+
+def test_dump_trajectory_round_trips():
+    t = traj([("ls", "a.py", 0), None, ("python t.py", "Traceback", 1), SUBMIT], shape="chat")
+    t.model, t.id = "m", "bug-1@m"
+    again = parse_trajectory(dump_trajectory(t))
+    assert again.id == "bug-1@m" and again.task == t.task
+    assert [(s.command, s.output, s.returncode, s.is_submit) for s in again.steps] == [
+        (s.command, s.output, s.returncode, s.is_submit) for s in t.steps
+    ]
+
+
+def test_context_variants_change_what_the_judge_sees(tmp_path, monkeypatch):
+    t = traj([f"echo {i}" for i in range(8)])
+    last5 = judge.build_prompt(t, t.steps[7])
+    history = judge.build_prompt(t, t.steps[7], "history")
+    plan = judge.build_prompt(t, t.steps[7], "plan")
+    assert "<step 1>" not in last5 and "1  echo 1" in history and "<step 6>" in history
+    assert "<step 4>" not in history  # only the last two steps are shown in full
+    assert "echo 3" not in plan and "3  thinking" in plan
+    monkeypatch.setattr(judge, "CACHE_DIR", tmp_path)
+    j = judge.Judge("m", max_cost=1, client=FakeClient(REPLY), context="history")
+    assert j.judge(t, t.steps[7]).source == "m#history"
+    assert j.calls == 1 and json.loads(next(tmp_path.iterdir()).read_text())["context"] == "history"
+
+
+def test_verdict_accepts_quoted_booleans():
+    t = traj(["ls"])
+    reply = '{"progress": "True", "redundant": "false", "risky": "maybe"}'
+    label = judge.parse_verdict(t, t.steps[0], "m", reply)
+    assert (label.progress, label.redundant, label.risky) == (True, False, None)
