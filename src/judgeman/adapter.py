@@ -83,6 +83,28 @@ def parse_trajectory(data: dict, fallback_id: str = "") -> Trajectory:
     )
 
 
+def dump_trajectory(traj: Trajectory) -> dict:
+    """The inverse of parse_trajectory, in chat-completions shape. Used for injected runs."""
+    instance = traj.id.split("@")[0]
+    task = f"<pr_description>\n{traj.task}\n</pr_description>"
+    messages: list[dict] = [{"role": "user", "content": task}]
+    for s in traj.steps:
+        if not s.command:
+            messages.append({"role": "user", "content": s.output, "extra": {"interrupt_type": "FormatError"}})
+            continue
+        call = f"c{s.index}"
+        action = {"actions": [{"command": s.command, "tool_call_id": call}]}
+        messages.append({"role": "assistant", "content": s.thought, "extra": action})
+        result = {"raw_output": s.output, "returncode": s.returncode}
+        messages.append({"role": "tool", "tool_call_id": call, "content": s.output, "extra": result})
+    info = {
+        "exit_status": traj.exit_status,
+        "submission": traj.submission,
+        "config": {"model": {"model_name": traj.model}},
+    }
+    return {"instance_id": instance, "info": info, "messages": messages}
+
+
 def load_results(path: Path) -> dict[str, bool]:
     """Accepts per_instance_details.json ({id: {resolved}}) or {"resolved": [ids]}."""
     data = json.loads(path.read_text())
