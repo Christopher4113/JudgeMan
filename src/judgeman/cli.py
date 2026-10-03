@@ -85,15 +85,40 @@ def _outcome(t: Trajectory) -> str:
     return {True: "[green]pass[/]", False: "[red]fail[/]", None: "?"}[t.resolved]
 
 
+def _marks(label: StepLabel) -> list[str]:
+    return [name for axis, value, name, _ in MARKS.values() if getattr(label, axis) is value]
+
+
 def show(args) -> None:
+    """One run step by step: check flags, plus verdicts from any label files given."""
+    sources: dict[str, dict[tuple[str, int], StepLabel]] = {}
+    for path in args.labels or []:
+        for x in read_labels(Path(path)):
+            if x.source != "checks":
+                sources.setdefault(x.source, {})[x.trajectory_id, x.step] = x
     for t in _load(args):
-        table = Table(title=f"{t.id}  {t.exit_status}  tests: {_outcome(t)}")
-        for col in ("step", "rc", "command", "flags"):
+        table = Table(title=f"{t.id}  {t.exit_status}  tests: {_outcome(t)}", show_lines=bool(sources))
+        for col in ("step", "command", "checks", *(s.rsplit("/", 1)[-1] for s in sources)):
             table.add_column(col, overflow="fold")
+        if sources:
+            table.add_column("why", overflow="fold", ratio=1)
         for step, label in zip(t.steps, run_checks(t), strict=True):
-            command = step.command.split("\n", 1)[0][:90] or "(no valid command)"
-            flags = f"[yellow]{', '.join(label.flags)}[/]"
-            table.add_row(str(step.index), str(step.returncode), escape(command), flags)
+            command = escape(step.command.split("\n", 1)[0][:90] or "(no valid command)")
+            if step.returncode not in (0, None):
+                command += " [red](failed)[/]"
+            # steps count from 0 here because the judges' critiques refer to them that way
+            row = [str(step.index), command, f"[yellow]{', '.join(label.flags)}[/]"]
+            why, flagged = "", bool(label.flags)
+            for rows in sources.values():
+                verdict = rows.get((t.id, step.index))
+                marks = _marks(verdict) if verdict else []
+                row.append("[dim]-[/]" if verdict is None else f"[yellow]{', '.join(marks)}[/]")
+                flagged = flagged or bool(marks)
+                if marks and verdict.critique and not why:
+                    text = verdict.critique
+                    why = f"[dim]{escape(text[:220] + ('...' if len(text) > 220 else ''))}[/]"
+            if flagged or not args.flagged:
+                table.add_row(*row, *([why] if sources else []))
         console.print(table)
 
 
@@ -268,7 +293,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs")
 
-    command("show", show)
+    p = command("show", show)
+    p.add_argument("--labels", action="append", help="label file shown beside the checks, repeatable")
+    p.add_argument("--flagged", action="store_true", help="only steps that someone flagged")
 
     p = command("eval", evaluate)
     p.add_argument("--judge", help="model name, e.g. openai/gpt-5-mini")
