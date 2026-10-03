@@ -68,6 +68,11 @@ The checks are tuned to rarely fire wrongly, even if they miss things.
   dangerous (five were `git add -A`) and relabeled as fine: staging everything is sloppy, and it
   causes empty patches later, but it is not destructive. Measuring this axis needs injected
   mistakes or a less constrained agent.
+- `redundant` is not yet a usable axis. Labeled with the run history on screen, the labeler marks
+  about a third of steps as repeats; Opus 5.5 reaches kappa 0.20 against that (95% CI 0.11 to
+  0.31), the cheap judge 0.02 and the checks 0.12. Labels made without the history on screen are
+  not comparable, so `judgeman agree` overstates this axis; use `scripts/redundant_estimate.py`.
+  The definition needs tightening before any judge is compared or trained on it.
 - `judgeman agree` marks an axis with `*` when it has fewer than 10 yes or 10 no labels. Treat
   those numbers as unknown.
 
