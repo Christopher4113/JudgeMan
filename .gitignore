@@ -7,3 +7,4 @@ dist/
 .judgeman/
 runs/
 .env
+finetune/

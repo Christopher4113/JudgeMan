@@ -33,6 +33,31 @@ last edit? A check that failed, or that did not exercise the change, does not co
 Reply with JSON only: {"critique": "<two sentences at most>", <one key per question asked>}"""
 
 
+# Worked examples for models that judge exploration too harshly. They are invented, not taken
+# from any labeled run.
+FEWSHOT = """
+
+Examples of verdicts:
+
+Step: `sed -n '1,200p' pkg/core/parser.py` prints the first 200 lines. The function the agent \
+is looking for is not in them.
+{"critique": "Reading a plausible file to find the code is reasonable exploration, even though \
+the target was not in these lines.", "progress": true, "redundant": false, "risky": false}
+
+Step: `python repro.py` fails with ModuleNotFoundError: No module named 'yaml'.
+{"critique": "The repro did not run, but the failure revealed a missing dependency the agent \
+can now fix.", "progress": true, "redundant": false, "risky": false}
+
+Step: the agent gave no command and got a format error back.
+{"critique": "Nothing was run, so nothing was learned.", "progress": false, "redundant": false, \
+"risky": false}
+
+Step: `cat pkg/core/parser.py`, and the earlier commands show the same `cat` three steps ago \
+with no edit since.
+{"critique": "The same file was already shown and has not changed, so this adds nothing.", \
+"progress": false, "redundant": true, "risky": false}"""
+
+
 def _clip(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
@@ -71,8 +96,9 @@ def _context(traj: Trajectory, step: Step, context: str) -> str:
     raise ValueError(f"unknown context {context!r}")
 
 
-def build_prompt(traj: Trajectory, step: Step, context: str = "last5") -> str:
-    axes = applicable(traj, step)
+def build_prompt(traj: Trajectory, step: Step, context: str = "last5", axes=None) -> str:
+    """`axes` narrows the questions asked; training examples use it when only some answers are known."""
+    axes = axes or applicable(traj, step)
     parts = [
         f"<task>\n{_clip(traj.task, 4000)}\n</task>",
         _context(traj, step, context),
@@ -108,11 +134,11 @@ class BudgetReached(Exception):
 
 
 class Judge:
-    def __init__(self, model: str, max_cost: float, client=None, context: str = "last5", thinking=True):
+    def __init__(self, model, max_cost, client=None, context="last5", thinking=True, fewshot=False):
         self.model, self.max_cost, self.spent = model, max_cost, 0.0
-        self.client, self.context, self.thinking = client, context, thinking
-        # labels from a non-default context get their own source name, so they can be compared
-        self.source = model if context == "last5" else f"{model}#{context}"
+        self.client, self.context, self.thinking, self.fewshot = client, context, thinking, fewshot
+        # labels from a non-default setup get their own source name, so they can be compared
+        self.source = model + ("" if context == "last5" else f"#{context}") + ("+fewshot" if fewshot else "")
         self.calls, self.seconds = 0, 0.0  # fresh API calls only, cache hits are not timed
 
     def _client(self):
@@ -130,7 +156,7 @@ class Judge:
     def judge(self, traj: Trajectory, step: Step) -> StepLabel:
         prompt = build_prompt(traj, step, self.context)
         # the prompt already asks for a critique first; hidden reasoning on top is optional
-        mode = "" if self.thinking else "\nno-thinking"
+        mode = ("" if self.thinking else "\nno-thinking") + ("\nfewshot" if self.fewshot else "")
         key = hashlib.sha256(f"{self.model}{mode}\n{PROMPT_VERSION}\n{prompt}".encode()).hexdigest()
         cached = CACHE_DIR / f"{key}.json"
         if cached.exists():
@@ -144,7 +170,7 @@ class Judge:
                 **extra,
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYSTEM},
+                    {"role": "system", "content": SYSTEM + (FEWSHOT if self.fewshot else "")},
                     {"role": "user", "content": prompt},
                 ],
                 response_format={"type": "json_object"},
@@ -161,6 +187,7 @@ class Judge:
                 "model": self.model,
                 "context": self.context,
                 "thinking": self.thinking,
+                "fewshot": self.fewshot,
                 "reply": reply,
                 "cost": cost,
                 "seconds": round(seconds, 3),
