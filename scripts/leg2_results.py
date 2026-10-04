@@ -13,7 +13,7 @@ from judgeman.judge import CACHE_DIR, PROMPT_VERSION
 from judgeman.schema import read_labels
 
 L = Path("labels")
-TIERS = ("opus", "gemini", "qwen", "qwen-thinking")
+TIERS = ("opus", "gemini", "qwen", "qwen-fewshot", "qwen-kaggle-base", "qwen-ft")
 CONTEXTS = ("last5", "history", "plan")
 AXIS_OF = {"repeat": "redundant", "unverified": "unverified_completion"}
 
@@ -127,6 +127,7 @@ for f in CACHE_DIR.glob("*.json"):
     r = json.loads(f.read_text())
     if "seconds" in r:
         name = r["model"] + ("" if r.get("thinking", True) else " (no thinking)")
+        name += " +fewshot" if r.get("fewshot") else ""
         calls[name, r["context"]].append(r)
 for (model, context), rs in sorted(calls.items()):
     n = len(rs)

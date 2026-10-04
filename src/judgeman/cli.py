@@ -63,7 +63,8 @@ def fetch(args) -> None:
     bucket, prefix = match.groups()
 
     details = json.loads(details_raw)
-    pool = [i for i in sorted(details) if details[i].get("api_calls", 0) <= args.max_steps]
+    skip = set(Path(args.exclude).read_text().split()) if args.exclude else set()
+    pool = [i for i in sorted(details) if details[i].get("api_calls", 0) <= args.max_steps and i not in skip]
     rng = random.Random(args.seed)
     passed = [i for i in pool if details[i]["resolved"]]
     failed = [i for i in pool if not details[i]["resolved"]]
@@ -146,7 +147,8 @@ def evaluate(args) -> None:
         if args.dry_run:
             return
         judge = judge_mod.Judge(
-            args.judge, args.max_cost, context=args.context, thinking=not args.no_thinking
+            args.judge, args.max_cost, context=args.context, thinking=not args.no_thinking,
+            fewshot=args.fewshot,
         )
 
         def one(pair):
@@ -317,6 +319,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--max-steps", type=int, default=40, help="skip runs longer than this")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs")
+    p.add_argument("--exclude", help="file of instance ids to leave out, e.g. the test set's tasks")
 
     p = command("show", show)
     p.add_argument("--labels", action="append", help="label file shown beside the checks, repeatable")
@@ -330,6 +333,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--queue", help="JSON list of [run id, step] pairs to judge, skipping the rest")
     p.add_argument("--workers", type=int, default=1, help="judge calls in flight at once")
     p.add_argument("--no-thinking", action="store_true", help="turn off the model's hidden reasoning")
+    p.add_argument("--fewshot", action="store_true", help="add worked examples to the judge prompt")
     p.add_argument("--out", help="write StepLabel rows to this JSONL file")
 
     p = command("label", label)
