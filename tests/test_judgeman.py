@@ -352,3 +352,9 @@ def test_hindsight_context_shows_the_next_steps_only():
     assert seen.index("Step to judge") < seen.index("What the agent did next") < seen.index("<step 4>")
     assert "What the agent did next" not in judge.build_prompt(t, t.steps[7], "hindsight")
     assert "<step 4>" not in judge.build_prompt(t, t.steps[3])
+
+
+def test_demo_runs_offline_from_saved_results(capsys):
+    cli.main(["demo", "--no-pause"])  # the runs folder is absent in CI; the scoreboard still prints
+    out = capsys.readouterr().out
+    assert "How far to trust each judge" in out and "Layered" in out

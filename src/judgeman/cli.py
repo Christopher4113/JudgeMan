@@ -15,6 +15,7 @@ from . import judge as judge_mod
 from .adapter import load_trajectories
 from .agreement import agreement
 from .checks import run_checks
+from .demo import demo
 from .schema import AXES, StepLabel, Trajectory, applicable, read_labels, write_labels
 
 console = Console()
@@ -343,6 +344,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--history", type=int, default=5, help="earlier commands listed per step")
     p.add_argument("--only", choices=AXES, help="ask about this one axis, leave the others empty")
     p.add_argument("--queue", help="JSON list of [run id, step] pairs to label, skipping the rest")
+
+    p = command("demo", demo, runs=False)
+    p.add_argument("--no-pause", action="store_true", help="print every screen without waiting for Enter")
 
     p = command("agree", agree, runs=False)
     p.add_argument("gold", help="JSONL of hand labels")
