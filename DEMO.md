@@ -1,5 +1,25 @@
 # Demo script (about 3 minutes)
 
+## The one-command version
+
+```bash
+uv run judgeman demo
+```
+
+Three screens, Enter to move on, all from saved results (no API key, no network):
+
+1. **What an outcome-only eval shows.** 18 runs, pass or fail.
+2. **One failed run, step by step, through three layers.** Rules and a small open judge look at
+   every step; the frontier judge is asked only about the steps they flag. The last step shows why
+   the run failed: the agent submitted an empty patch.
+3. **How far to trust each judge.** Agreement with 516 hand-labeled steps, recall on 196 planted
+   mistakes, and cost. The layered setup is the bottom row.
+
+Screens 1 and 2 need the downloaded runs (see setup below). Screen 3 works from the repository alone.
+Add `--no-pause` to print everything at once.
+
+## The longer version, command by command
+
 Everything below reads files already in the repo and in `runs/`. No API key, no network.
 
 Setup once: `uv sync`. The runs in `runs/` are not in git; on a new machine re-fetch them with
