@@ -343,3 +343,12 @@ def test_verdict_accepts_quoted_booleans():
     reply = '{"progress": "True", "redundant": "false", "risky": "maybe"}'
     label = judge.parse_verdict(t, t.steps[0], "m", reply)
     assert (label.progress, label.redundant, label.risky) == (True, False, None)
+
+
+def test_hindsight_context_shows_the_next_steps_only():
+    t = traj([f"echo {i}" for i in range(8)])
+    seen = judge.build_prompt(t, t.steps[3], "hindsight")
+    assert "<step 2>" in seen and "<step 6>" in seen and "<step 7>" not in seen
+    assert seen.index("Step to judge") < seen.index("What the agent did next") < seen.index("<step 4>")
+    assert "What the agent did next" not in judge.build_prompt(t, t.steps[7], "hindsight")
+    assert "<step 4>" not in judge.build_prompt(t, t.steps[3])

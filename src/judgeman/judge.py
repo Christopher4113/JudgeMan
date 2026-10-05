@@ -11,7 +11,8 @@ from .schema import Step, StepLabel, Trajectory, applicable
 PROMPT_VERSION = "4"  # bump on any prompt change, it is part of the cache key
 CONTEXT_STEPS = 5
 # what the judge sees besides the task and the step being judged
-CONTEXTS = ("last5", "history", "plan")
+CONTEXTS = ("last5", "history", "plan", "hindsight")
+LOOKAHEAD = 3  # later steps shown in the hindsight context
 CACHE_DIR = Path(".judgeman/cache")
 
 SYSTEM = """You judge one step of an AI coding agent's run. Be strict and literal.
@@ -84,7 +85,7 @@ def _context(traj: Trajectory, step: Step, context: str) -> str:
     earlier = traj.steps[: step.index]
     if not earlier:
         return ""
-    if context == "last5":
+    if context in ("last5", "hindsight"):
         return "Earlier steps:\n" + "\n".join(_render(s, 1500) for s in earlier[-CONTEXT_STEPS:])
     if context == "history":  # every earlier command in one line, plus the last two steps in full
         lines = "\n".join(_one_line(s) for s in earlier)
@@ -104,6 +105,12 @@ def build_prompt(traj: Trajectory, step: Step, context: str = "last5", axes=None
         _context(traj, step, context),
         "Step to judge:\n" + _render(step, 3000),
     ]
+    later = traj.steps[step.index + 1 : step.index + 1 + LOOKAHEAD] if context == "hindsight" else []
+    if later:  # whether a step was useful often only shows in what the agent did with it
+        parts.append(
+            "What the agent did next. These are shown only so you can tell whether the judged step's "
+            "result was used. Do not judge them:\n" + "\n".join(_render(s, 800) for s in later)
+        )
     if "outcome_process_mismatch" in axes:
         outcome = "passed" if traj.resolved else "failed"
         parts.append(f"This is the last step. The hidden tests {outcome}.")
