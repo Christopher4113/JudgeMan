@@ -105,8 +105,8 @@ def _scoreboard(console: Console) -> None:
     rules = _keyed(read_labels(L / "checks-injected.jsonl"))
     title = "3. How far to trust each judge (against 516 hand-labeled steps and 196 planted mistakes)"
     table = Table(title=title)
-    for col in ("judge", "wasted steps: kappa", "new destructive commands caught", "untested submissions caught",
-                "$ per 1,000 steps"):  # fmt: skip
+    columns = ("judge", "wasted steps: kappa", "new destructive commands caught")
+    for col in (*columns, "untested submissions caught", "$ per 1,000 steps"):
         table.add_column(col)
     table.add_row("Rules only", "-", _caught(rules, "risky-unknown", "risky"),
                   _caught(rules, "unverified", "unverified_completion"), "0")  # fmt: skip
