@@ -3,6 +3,7 @@ import json
 import random
 import re
 import sys
+import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -214,6 +215,7 @@ def label(args, getch=_getch) -> None:
         if (t.id, step.index) in done:
             i += 1
             continue
+        shown_at = time.monotonic()
         console.rule(f"{t.id}  step {step.index + 1}/{len(t.steps)}  ({len(done)} labeled)")
         title = t.task.strip().split("\n", 1)[0]
         console.print(f"[bold]Bug being fixed:[/] {escape(title)}")
@@ -268,7 +270,8 @@ def label(args, getch=_getch) -> None:
                 i = next(n for n, (tt, ss) in enumerate(todo)
                          if (tt.id, ss.index) == (rows[-1].trajectory_id, rows[-1].step))  # fmt: skip
             continue
-        row = StepLabel(trajectory_id=t.id, step=step.index, source="human")
+        row = StepLabel(trajectory_id=t.id, step=step.index, source=getattr(args, "source", "human"),
+                        seconds=round(time.monotonic() - shown_at, 1))  # fmt: skip
         if key != "s":  # a skipped step keeps every axis empty
             for k, (axis, value, _, _) in keys.items():
                 setattr(row, axis, value if k in on else not value)
@@ -344,6 +347,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--history", type=int, default=5, help="earlier commands listed per step")
     p.add_argument("--only", choices=AXES, help="ask about this one axis, leave the others empty")
     p.add_argument("--queue", help="JSON list of [run id, step] pairs to label, skipping the rest")
+    p.add_argument("--source", default="human", help="who is labeling, e.g. human2 for a second person")
 
     p = command("demo", demo, runs=False)
     p.add_argument("--no-pause", action="store_true", help="print every screen without waiting for Enter")
