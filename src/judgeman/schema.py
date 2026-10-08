@@ -38,6 +38,7 @@ class StepLabel(BaseModel):
     outcome_process_mismatch: bool | None = None
     flags: list[str] = []
     critique: str = ""
+    seconds: float | None = None  # how long a person spent on the step, or a judge call took
 
 
 def applicable(traj: Trajectory, step: Step) -> tuple[str, ...]:
