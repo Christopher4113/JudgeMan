@@ -23,8 +23,10 @@ console = Console()
 EXPERIMENTS = "https://raw.githubusercontent.com/SWE-bench/experiments/main/evaluation/verified"
 # key -> (axis, value stored when the key is on, name shown, what it means)
 MARKS = {
-    "w": ("progress", False, "wasted", "it produced nothing the agent could use "
-          "(a failed attempt that revealed something new is NOT wasted)"),
+    "w": ("progress", False, "wasted", "it gave the agent nothing it went on to use. "
+          "Failed command: wasted unless the error taught it something it used next; a repeat of a "
+          "failure it already saw is wasted. Housekeeping (git add, git status, a linter): wasted when "
+          "the output is empty or ignored. A first read or listing is fine even if it led nowhere."),
     "r": ("redundant", True, "repeat", "it only showed content already seen (same lines, or same "
           "command and result) with nothing changed in between"),
     "d": ("risky", True, "dangerous", "it could break things, or it changed an existing test"),
