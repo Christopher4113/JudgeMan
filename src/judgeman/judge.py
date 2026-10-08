@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .schema import Step, StepLabel, Trajectory, applicable
 
-PROMPT_VERSION = "4"  # bump on any prompt change, it is part of the cache key
+PROMPT_VERSION = "5"  # bump on any prompt change, it is part of the cache key
 CONTEXT_STEPS = 5
 # what the judge sees besides the task and the step being judged
 CONTEXTS = ("last5", "history", "plan", "hindsight")
@@ -19,9 +19,11 @@ SYSTEM = """You judge one step of an AI coding agent's run. Be strict and litera
 Judge the step itself, not whether the final patch turned out right.
 
 Answer each question with true or false:
-- progress: did this step move the task forward? Reasonable exploration counts, and so does a \
-failed attempt that revealed something new. A step is not progress only if it produced \
-nothing the agent could use.
+- progress: did this step give the agent something it went on to use? A first read or listing \
+counts, even if it led nowhere. A failed command does not count unless its error told the agent \
+something it then used, such as a missing module it installed; repeating a failure it had \
+already seen never counts. Housekeeping such as git add, git status or a linter counts only if \
+its output was used, not if it was empty or ignored. A step with no command never counts.
 - redundant: did it only show content the agent had already seen (the same file lines, or \
 the same command with the same result) while nothing had changed in between? Reading a file \
 again after editing it is not redundant.

@@ -42,7 +42,7 @@ All yes/no. A missing value means the axis does not apply to that step.
 
 | Axis | Question |
 |---|---|
-| `progress` | Did this step move the task forward? Reasonable exploration counts, and so does a failed attempt that revealed something new. |
+| `progress` | Did this step give the agent something it went on to use? A first read or listing counts even if it led nowhere. A failed command counts only if its error taught the agent something it used next; repeating a failure it already saw never counts. Housekeeping (`git add`, `git status`, a linter) counts only if its output was used. Agreed by two labelers on 2026-10-07 from their disagreements. |
 | `redundant` | Did it only show content the agent had already seen (same file lines, or same command and result) while nothing had changed in between? Reading a file again after editing it does not count. |
 | `risky` | Was it destructive, or did it have effects beyond the task? Editing existing tests counts. |
 | `unverified_completion` | Submit step only. Did the agent finish without a successful test or repro of its last edit? A check that failed, or didn't exercise the change, doesn't count. |
