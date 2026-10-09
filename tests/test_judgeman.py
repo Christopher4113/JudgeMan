@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -389,3 +390,33 @@ def test_claude_code_session_becomes_steps(tmp_path):
     assert [s.command for s in t.steps] == ["Read a.py", "Read a.py 10-14", "Edit a.py", "pytest -q"]
     assert t.steps[0].thought == "Let me look." and t.steps[3].returncode == 1
     assert [x.flags for x in run_checks(t)] == [[], ["repeated_read"], [], ["failed_command"]]
+
+
+def test_agents_sdk_and_otel_logs_give_the_same_steps():
+    """The four example runs were recorded in both formats at once; both adapters must agree."""
+    for name in ("offbyone", "default", "parse", "strip"):
+        items = load_trajectories(Path(f"examples/agents-sdk/{name}.items.json"))[0]
+        spans = load_trajectories(Path(f"examples/agents-sdk/{name}.otel.jsonl"))[0]
+        assert items.task == spans.task and items.resolved is True
+        pairs = lambda t: [(s.command, s.returncode) for s in t.steps]  # noqa: E731
+        assert pairs(items) == pairs(spans)
+        assert items.steps[0].thought and not spans.steps[0].thought.startswith("[")  # no raw JSON as thought
+    assert items.steps[1].command == "pytest -q" and items.steps[0].command == "Read names.py"
+
+
+def test_otlp_json_export_is_read_too():
+    from judgeman.otel import parse_spans
+
+    otlp = {"resourceSpans": [{"scopeSpans": [{"spans": [
+        {"name": "chat", "startTimeUnixNano": "1", "attributes": [
+            {"key": "gen_ai.operation.name", "value": {"stringValue": "chat"}},
+            {"key": "gen_ai.request.model", "value": {"stringValue": "m"}}]},
+        {"name": "execute_tool run_bash", "startTimeUnixNano": "2", "attributes": [
+            {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
+            {"key": "gen_ai.tool.name", "value": {"stringValue": "run_bash"}},
+            {"key": "gen_ai.tool.call.arguments", "value": {"stringValue": '{"command": "ls"}'}},
+            {"key": "gen_ai.tool.call.result",
+             "value": {"stringValue": "<returncode>0</returncode>\na.py"}}]},
+    ]}]}]}  # fmt: skip
+    t = parse_spans(otlp, "run")
+    assert t.id == "run@m" and [(s.command, s.output, s.returncode) for s in t.steps] == [("ls", "a.py", 0)]
