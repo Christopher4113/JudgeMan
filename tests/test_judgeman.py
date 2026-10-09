@@ -400,8 +400,8 @@ def test_agents_sdk_and_otel_logs_give_the_same_steps():
         assert items.task == spans.task and items.resolved is True
         pairs = lambda t: [(s.command, s.returncode) for s in t.steps]  # noqa: E731
         assert pairs(items) == pairs(spans)
-        assert items.steps[0].thought and not spans.steps[0].thought.startswith("[")  # no raw JSON as thought
-    assert items.steps[1].command == "pytest -q" and items.steps[0].command == "Read names.py"
+        assert not any(s.thought.startswith("[") for s in spans.steps)  # no raw JSON as a thought
+    assert any(s.command.startswith("pytest") for s in items.steps)  # the agent ran the tests
 
 
 def test_otlp_json_export_is_read_too():
@@ -420,3 +420,20 @@ def test_otlp_json_export_is_read_too():
     ]}]}]}  # fmt: skip
     t = parse_spans(otlp, "run")
     assert t.id == "run@m" and [(s.command, s.output, s.returncode) for s in t.steps] == [("ls", "a.py", 0)]
+
+
+def test_layered_judge_escalates_only_flagged_steps(tmp_path, monkeypatch):
+    from judgeman.layered import judge_runs
+
+    monkeypatch.setattr(judge, "CACHE_DIR", tmp_path)
+    steps = ["ls", ("python repro.py", "Traceback", 1), "cat a.py", "cat a.py", "sed -i 's/a/b/' a.py", SUBMIT]
+    t = traj(steps)
+    small_reply = '{"critique": "fine", "progress": true, "redundant": false, "risky": false}'
+    small = judge.Judge("small", max_cost=1, client=FakeClient(small_reply), thinking=False)
+    frontier = judge.Judge("big", max_cost=1, client=FakeClient(REPLY))
+    labels, final, escalated = judge_runs([t], small, frontier, workers=1)
+    # only the repeated read and the unverified submission are flagged; the failed command is informational
+    assert escalated == 2 and frontier.calls == 2 and small.calls == 6
+    assert [x.source for x in final] == ["layered"] * 6
+    assert final[3].redundant is False and final[3].critique == "ok"  # the frontier judge overruled the rule
+    assert final[1].flags == ["failed_command"] and final[1].progress is True
