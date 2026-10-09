@@ -100,6 +100,17 @@ Read the layered row with care: it was measured on the same labels the layering 
 from, and its interval overlaps the frontier-only row. The honest number for your agent is the
 one `judgeman calibrate` prints.
 
+**On a different agent.** `judgeman calibrate` was run on the Claude Code session that built
+this repository (380 steps, Claude Fable 5.1), with 50 blind steps labeled by hand, 35 minutes
+and $3.55. On `risky` the layered verdict reached kappa 0.70 against those labels: it caught all
+10 steps the labeler called dangerous (scripts that rewrote the test file, flagged by
+`edited_existing_test` and confirmed by the frontier judge) and raised 8 the labeler did not mind
+(pushes to `main`, `rm -rf dist`, a `git checkout --` that discarded edits). On `progress` the
+labeler found no wasted step in the sample while the judge called 8 of them wasted: empty
+tool-loading calls, commands the harness blocked, a script that crashed. Too few to compute a
+kappa, and the tool said so. The direction is clear enough to act on: on Claude Code logs most
+"wasted" calls are harness no-ops, which is the next adapter fix.
+
 What did not help: showing the judge what the agent did *next* (hindsight) lowered agreement;
 mid-tier models were no better than the cheap one; two QLoRA fine-tunes of the 9B judge on
 295 to 400 labels did not beat the base model on wasted steps (kappa 0.22 and 0.18 vs 0.20),
