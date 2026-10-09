@@ -116,7 +116,16 @@ def load_results(path: Path) -> dict[str, bool]:
 
 
 def load_trajectories(path: Path, results: Path | None = None) -> list[Trajectory]:
-    files = sorted(path.rglob("*.traj.json")) if path.is_dir() else [path]
+    """mini-SWE-agent logs (*.traj.json) or Claude Code session logs (*.jsonl), by file name."""
+    from .claude_code import load_session
+
+    if path.is_dir():
+        files = sorted(path.rglob("*.traj.json")) + sorted(path.rglob("*.jsonl"))
+    else:
+        files = [path]
+    if path.suffix == ".jsonl" or (path.is_dir() and files and all(f.suffix == ".jsonl" for f in files)):
+        return [load_session(f) for f in files if f.suffix == ".jsonl"]
+    files = [f for f in files if f.suffix != ".jsonl"]
     beside = (path if path.is_dir() else path.parent) / "per_instance_details.json"
     if results is None and beside.exists():
         results = beside

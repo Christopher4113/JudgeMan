@@ -93,6 +93,10 @@ def _segment_kind(argv: list[str], writes: list[str], command: str, mutators: se
     if not argv:
         return "read"
     cmd, args = argv[0].rsplit("/", 1)[-1], argv[1:]
+    if cmd in ("Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead"):  # Claude Code tools
+        return "read"
+    if cmd in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        return "edit"
     if cmd == "sed":
         return "edit" if any(a.startswith("-i") or a == "--in-place" for a in args) else "read"
     if cmd == "git":
@@ -171,8 +175,10 @@ def _read_ranges(command: str) -> list[tuple[str, int, float]]:
         return out
     for argv, _ in segments:
         argv = _strip_prefix(argv)
-        if len(argv) == 2 and argv[0] == "cat":
+        if len(argv) == 2 and argv[0] in ("cat", "Read"):
             out.append((_norm(argv[1]), 1, float("inf")))
+        elif len(argv) == 3 and argv[0] == "Read" and (m := re.fullmatch(r"(\d+)-(\d+)", argv[2])):
+            out.append((_norm(argv[1]), int(m[1]), int(m[2])))
         elif len(argv) == 4 and argv[:2] == ["sed", "-n"] and (m := SED_RANGE.fullmatch(argv[2])):
             out.append((_norm(argv[3]), int(m[1]), int(m[2])))
     return out
