@@ -115,24 +115,48 @@ def load_results(path: Path) -> dict[str, bool]:
     return {k: bool(v["resolved"]) for k, v in data.items() if isinstance(v, dict)}
 
 
-def load_trajectories(path: Path, results: Path | None = None) -> list[Trajectory]:
-    """mini-SWE-agent logs (*.traj.json) or Claude Code session logs (*.jsonl), by file name."""
-    from .claude_code import load_session
+def _sniff(path: Path) -> str:
+    """Which log format a file holds: mini-swe, claude-code, agents-sdk or otel."""
+    head = path.read_text()[:4000] if path.suffix == ".jsonl" else path.read_text()
+    if path.suffix == ".jsonl":
+        first = head.split("\n", 1)[0]
+        return "otel" if '"attributes"' in first and '"context"' in first else "claude-code"
+    data = json.loads(head)
+    if isinstance(data, dict) and "resourceSpans" in data:
+        return "otel"
+    if isinstance(data, dict) and "messages" in data and "info" in data:
+        return "mini-swe"
+    return "agents-sdk"
 
-    if path.is_dir():
-        files = sorted(path.rglob("*.traj.json")) + sorted(path.rglob("*.jsonl"))
-    else:
-        files = [path]
-    if path.suffix == ".jsonl" or (path.is_dir() and files and all(f.suffix == ".jsonl" for f in files)):
-        return [load_session(f) for f in files if f.suffix == ".jsonl"]
-    files = [f for f in files if f.suffix != ".jsonl"]
+
+def load_trajectories(path: Path, results: Path | None = None) -> list[Trajectory]:
+    """Any supported log: mini-SWE-agent, Claude Code sessions, OpenAI Agents SDK items, OTel spans."""
+    from .agents_sdk import load_items
+    from .claude_code import load_session
+    from .otel import load_spans
+
+    patterns = ("*.traj.json", "*.jsonl", "*.items.json", "*.spans.json", "*.otel.json")
+    files = sorted({f for pat in patterns for f in path.rglob(pat)}) if path.is_dir() else [path]
     beside = (path if path.is_dir() else path.parent) / "per_instance_details.json"
     if results is None and beside.exists():
         results = beside
     resolved = load_results(results) if results else {}
     trajs = []
     for f in files:
-        t = parse_trajectory(json.loads(f.read_text()), fallback_id=f.name.split(".")[0])
-        t.resolved = resolved.get(t.id.split("@")[0])
+        fmt = _sniff(f)
+        if fmt == "mini-swe":
+            t = parse_trajectory(json.loads(f.read_text()), fallback_id=f.name.split(".")[0])
+        elif fmt == "claude-code":
+            t = load_session(f)
+        elif fmt == "agents-sdk":
+            t = load_items(f)
+        else:
+            t = load_spans(f)
+        instance = t.id.split("@")[0]
+        sibling = f.with_name(f"{instance}.result.json")  # one small file per run, {"resolved": bool}
+        if instance in resolved:
+            t.resolved = resolved[instance]
+        elif sibling.exists():
+            t.resolved = json.loads(sibling.read_text()).get("resolved")
         trajs.append(t)
     return trajs
