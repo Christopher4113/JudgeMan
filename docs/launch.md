@@ -28,8 +28,8 @@ into something a person can run on their own agent in five minutes:
 
 The calibration was then run for real on this project's own Claude Code session: $3.55, 35 minutes
 of labeling, risky kappa 0.70, wasted steps unmeasurable because the labeler found none in 50 and
-the judge's 8 calls were harness no-ops. That last point is the first concrete fix the calibration
-produced: skip tool-loading calls in the Claude Code adapter.
+the judge's 8 calls were harness no-ops. That last point produced the first concrete fix from the
+calibration: the Claude Code adapter now skips tool-loading calls.
 
 What is deliberately not in it: no dashboard, no hosted service, no hindsight context (it
 lowered agreement), no judging of failed commands (two people agree on those at kappa 0.39, so
