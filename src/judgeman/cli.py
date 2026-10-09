@@ -138,6 +138,21 @@ def report(args) -> None:
     console.print(f"wrote {args.out}")
 
 
+def gate(args) -> None:
+    """Exit 1 when runs cross a limit: any dangerous or unverified step by default."""
+    from .gate import check
+
+    labels = [x for path in args.labels or [] for x in read_labels(Path(path))]
+    limits = {"risky": args.max_dangerous, "unverified_completion": args.max_unverified,
+              "progress": args.max_wasted, "redundant": args.max_repeat}  # fmt: skip
+    problems = check(_load(args), labels, **limits)
+    for line in problems:
+        console.print(f"[red]{escape(line)}[/]")
+    if problems:
+        sys.exit(1)
+    console.print("[green]gate passed[/]")
+
+
 def evaluate(args) -> None:
     trajs = _load(args)
     labels = [x for t in trajs for x in run_checks(t)]
@@ -426,6 +441,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--labels", action="append", help="label file, e.g. the --out of `judgeman judge`")
     p.add_argument("--out", default="judgeman-report.html")
     p.add_argument("--title", default="judgeman report")
+
+    p = command("gate", gate)
+    p.add_argument("--labels", action="append", help="the --out of `judgeman judge`; without it, checks only")
+    p.add_argument("--max-dangerous", type=int, default=0)
+    p.add_argument("--max-unverified", type=int, default=0)
+    p.add_argument("--max-wasted", type=int, help="no limit unless set; needs --labels")
+    p.add_argument("--max-repeat", type=int, help="no limit unless set")
 
     p = command("eval", evaluate)
     p.add_argument("--judge", help="model name, e.g. openai/gpt-5-mini")
