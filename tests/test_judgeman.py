@@ -358,3 +358,34 @@ def test_demo_runs_offline_from_saved_results(capsys):
     cli.main(["demo", "--no-pause"])  # the runs folder is absent in CI; the scoreboard still prints
     out = capsys.readouterr().out
     assert "How far to trust each judge" in out and "Layered" in out
+
+
+def test_claude_code_session_becomes_steps(tmp_path):
+    from judgeman.claude_code import parse_session
+
+    def msg(kind, content, **extra):
+        return {"type": kind, "isSidechain": False, "uuid": "u", "message": {"role": kind, "content": content,
+                "model": "claude-x"}, **extra}  # fmt: skip
+
+    tool = lambda i, name, args: {"type": "tool_use", "id": i, "name": name, "input": args}  # noqa: E731
+    def res(i, text, err=False):
+        return {"type": "tool_result", "tool_use_id": i, "content": text, "is_error": err}
+
+    lines = [
+        msg("user", "fix the parser"),
+        msg("assistant", [{"type": "text", "text": "Let me look."},
+                          tool("1", "Read", {"file_path": "a.py"})]),  # fmt: skip
+        msg("user", [res("1", "def f(): pass")]),
+        msg("assistant", [tool("2", "Read", {"file_path": "a.py", "offset": 10, "limit": 5})]),
+        msg("user", [res("2", "...")]),
+        msg("assistant", [tool("3", "Edit", {"file_path": "a.py", "old_string": "x", "new_string": "y"})]),
+        msg("user", [res("3", "ok")]),
+        msg("assistant", [tool("4", "Bash", {"command": "pytest -q"})]),
+        msg("user", [res("4", "1 failed", err=True)]),
+        msg("assistant", [tool("5", "Bash", {"command": "ls"})], isSidechain=True),
+    ]
+    t = parse_session(lines, "sess")
+    assert t.id == "sess@claude-x" and t.task == "fix the parser"
+    assert [s.command for s in t.steps] == ["Read a.py", "Read a.py 10-14", "Edit a.py", "pytest -q"]
+    assert t.steps[0].thought == "Let me look." and t.steps[3].returncode == 1
+    assert [x.flags for x in run_checks(t)] == [[], ["repeated_read"], [], ["failed_command"]]
