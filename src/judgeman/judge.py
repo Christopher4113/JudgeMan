@@ -175,17 +175,22 @@ class Judge:
                 raise BudgetReached
             started = time.perf_counter()
             extra = {} if self.thinking else {"extra_body": {"reasoning": {"enabled": False}}}
-            response = self._client().chat.completions.create(
-                **extra,
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": SYSTEM + (FEWSHOT if self.fewshot else "")},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0,
-                max_tokens=1000,  # unset, providers reserve credit for their full output limit
-            )
+            try:
+                response = self._client().chat.completions.create(
+                    **extra,
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM + (FEWSHOT if self.fewshot else "")},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0,
+                    max_tokens=1000,  # unset, providers reserve credit for their full output limit
+                )
+            except Exception as e:  # out of credit or over the key's limit: stop, keep what we have
+                if getattr(e, "status_code", None) in (402, 403):
+                    raise BudgetReached from e
+                raise
             reply = response.choices[0].message.content or ""
             # ponytail: relies on the provider reporting usage.cost (OpenRouter does).
             # Without it spend counts as 0 and the prepaid credit is the only cap.
