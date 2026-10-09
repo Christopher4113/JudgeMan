@@ -338,8 +338,10 @@ def calibrate(args) -> None:
     if any(k not in human for k in chosen):
         console.print(f"[bold]Calibration:[/] {len(chosen)} of your agent's steps to label, blind. Half "
                       "were flagged by some layer, half were not; the screen will not say which.\n")
-        ask = argparse.Namespace(path=args.path, results=args.results, out=args.out, task=False, history=60,
-                                 max_output=args.max_output, queue=str(queue_path), source="human")  # fmt: skip
+        ask = argparse.Namespace(
+            path=args.path, results=args.results, out=args.out, task=False, history=60,
+            max_output=args.max_output, queue=str(queue_path), source="human",
+        )
         label(ask)
         human = {(x.trajectory_id, x.step): x for x in read_labels(Path(args.out))}
     sources = {}
