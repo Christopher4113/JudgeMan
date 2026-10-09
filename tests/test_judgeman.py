@@ -426,7 +426,8 @@ def test_layered_judge_escalates_only_flagged_steps(tmp_path, monkeypatch):
     from judgeman.layered import judge_runs
 
     monkeypatch.setattr(judge, "CACHE_DIR", tmp_path)
-    steps = ["ls", ("python repro.py", "Traceback", 1), "cat a.py", "cat a.py", "sed -i 's/a/b/' a.py", SUBMIT]
+    failing = ("python repro.py", "Traceback", 1)
+    steps = ["ls", failing, "cat a.py", "cat a.py", "sed -i 's/a/b/' a.py", SUBMIT]
     t = traj(steps)
     small_reply = '{"critique": "fine", "progress": true, "redundant": false, "risky": false}'
     small = judge.Judge("small", max_cost=1, client=FakeClient(small_reply), thinking=False)
