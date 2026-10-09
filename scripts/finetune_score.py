@@ -16,7 +16,13 @@ for f in Path("labels/gold-files.txt").read_text().split() + ["runs/injected"]:
     for t in load_trajectories(Path(f)):
         steps |= {(t.id, s.index): (t, s) for s in t.steps}
 
-for source, tier in (("exam-replies.jsonl", "qwen-ft"), ("exam-replies-base.jsonl", "qwen-kaggle-base")):
+RUNS = (
+    ("exam-replies-v1.jsonl", "qwen-ft"),  # first fine-tune: flagged-only labels, prompt v4
+    ("exam-replies-base-v1.jsonl", "qwen-kaggle-base"),
+    ("exam-replies-v2.jsonl", "qwen-ft2"),  # second: new-rule labels, prompt v5
+    ("exam-replies-base-v2.jsonl", "qwen-kaggle-base2"),
+)
+for source, tier in RUNS:
     path = Path("finetune") / source
     if not path.exists():
         print("missing", path)
