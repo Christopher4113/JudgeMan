@@ -12,6 +12,9 @@ from .schema import Step, Trajectory
 
 READ_TOOLS = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+# Harness plumbing, not a decision of the agent. Calibrating on a real session, every "wasted"
+# verdict on one of these was rejected by the labeler: they load tool schemas and print nothing.
+PLUMBING = {"ToolSearch"}
 
 
 def _text(content) -> str:
@@ -66,6 +69,8 @@ def parse_session(lines: list[dict], session_id: str) -> Trajectory:
         thought = _text(content).strip()
         for block in content if isinstance(content, list) else []:
             if not (isinstance(block, dict) and block.get("type") == "tool_use"):
+                continue
+            if block.get("name") in PLUMBING:
                 continue
             result = results.get(block.get("id"), {})
             output = _text(result.get("content"))

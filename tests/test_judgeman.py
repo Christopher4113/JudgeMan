@@ -383,6 +383,8 @@ def test_claude_code_session_becomes_steps(tmp_path):
         msg("user", [res("3", "ok")]),
         msg("assistant", [tool("4", "Bash", {"command": "pytest -q"})]),
         msg("user", [res("4", "1 failed", err=True)]),
+        msg("assistant", [tool("6", "ToolSearch", {"query": "select:WebFetch"})]),  # harness plumbing
+        msg("user", [res("6", "")]),
         msg("assistant", [tool("5", "Bash", {"command": "ls"})], isSidechain=True),
     ]
     t = parse_session(lines, "sess")
