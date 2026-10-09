@@ -85,7 +85,8 @@ asked about a flagged step, its verdict replaces the rule's (in the example runs
 
 Measured on 516 hand-labeled steps from published mini-SWE-agent runs on SWE-bench Verified
 (six models), plus 196 runs with planted mistakes. Full method and tables in
-[reports/leg1-report.pdf](reports/leg1-report.pdf) and [reports/leg2-report.pdf](reports/leg2-report.pdf).
+[reports/leg1-report.pdf](reports/leg1-report.pdf) and [reports/leg2-report.pdf](reports/leg2-report.pdf);
+[reports/leg3-report.pdf](reports/leg3-report.pdf) covers the tool itself and the calibration below.
 
 | Judge of "was this step wasted" | Kappa vs hand labels | Cost per 1,000 steps | Latency per step |
 |---|---|---|---|
