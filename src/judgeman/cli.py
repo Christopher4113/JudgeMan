@@ -184,6 +184,40 @@ def evaluate(args) -> None:
         console.print(f"wrote {len(labels)} labels to {args.out}")
 
 
+def judge(args) -> None:
+    """Layered judging: rules, a small judge on every step, a frontier judge on the flagged steps."""
+    from .layered import judge_runs
+
+    trajs = _load(args)
+    steps = sum(len(t.steps) for t in trajs)
+    small = judge_mod.Judge(args.small, args.max_cost, thinking=False) if args.small else None
+    frontier = judge_mod.Judge(args.frontier, args.max_cost) if args.frontier else None
+    if args.dry_run:
+        calls, tokens = judge_mod.estimate_tokens([(t, s) for t in trajs for s in t.steps])
+        console.print(f"{len(trajs)} runs, {steps} steps. Small judge: {calls} calls, about {tokens:,} "
+                      "tokens. Frontier judge: about a third of those.")  # fmt: skip
+        return
+    labels, final, escalated = judge_runs(trajs, small, frontier, args.workers)
+    table = Table(title=f"{len(trajs)} runs, {steps} steps, {escalated} sent to the frontier judge")
+    for col in ("run", "steps", "tests", "wasted", "repeat", "risky", "unverified", "failed cmds"):
+        table.add_column(col)
+    for t in trajs:
+        rows = [x for x in final if x.trajectory_id == t.id]
+        table.add_row(
+            t.id.split("@")[0], str(len(t.steps)), _outcome(t),
+            str(sum(x.progress is False for x in rows)), str(sum(bool(x.redundant) for x in rows)),
+            str(sum(bool(x.risky) for x in rows)), str(sum(bool(x.unverified_completion) for x in rows)),
+            str(sum("failed_command" in x.flags for x in rows)),
+        )  # fmt: skip
+    console.print(table)
+    spent = sum(j.spent for j in (small, frontier) if j)
+    out = args.out or "<out>"
+    console.print(f"spent ${spent:.4f}; see every step with `judgeman show ... --labels {out}`")
+    if args.out:
+        write_labels(Path(args.out), labels)
+        console.print(f"wrote {len(labels)} labels to {args.out}")
+
+
 def _getch() -> str:
     try:
         import termios
@@ -341,6 +375,15 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--no-thinking", action="store_true", help="turn off the model's hidden reasoning")
     p.add_argument("--fewshot", action="store_true", help="add worked examples to the judge prompt")
     p.add_argument("--out", help="write StepLabel rows to this JSONL file")
+
+    p = command("judge", judge)
+    p.add_argument("--small", default="qwen/qwen3.5-9b", help="small judge on every step; '' to skip")
+    p.add_argument("--frontier", default="anthropic/claude-opus-5.5",
+                   help="judge for flagged steps; '' to skip")  # fmt: skip
+    p.add_argument("--max-cost", type=float, default=1.00, help="dollar cap per judge for this command")
+    p.add_argument("--workers", type=int, default=4, help="judge calls in flight at once")
+    p.add_argument("--dry-run", action="store_true", help="count steps and tokens, spend nothing")
+    p.add_argument("--out", help="write every layer's labels to this JSONL file")
 
     p = command("label", label)
     p.add_argument("--out", default="labels/human.jsonl")
