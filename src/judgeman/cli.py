@@ -129,6 +129,15 @@ def show(args) -> None:
         console.print(table)
 
 
+def report(args) -> None:
+    """One self-contained HTML page: every run step by step, with check flags and judge verdicts."""
+    from .report import render
+
+    labels = [x for path in args.labels or [] for x in read_labels(Path(path))]
+    Path(args.out).write_text(render(_load(args), labels, args.title))
+    console.print(f"wrote {args.out}")
+
+
 def evaluate(args) -> None:
     trajs = _load(args)
     labels = [x for t in trajs for x in run_checks(t)]
@@ -412,6 +421,11 @@ def main(argv: list[str] | None = None) -> None:
     p = command("show", show)
     p.add_argument("--labels", action="append", help="label file shown beside the checks, repeatable")
     p.add_argument("--flagged", action="store_true", help="only steps that someone flagged")
+
+    p = command("report", report)
+    p.add_argument("--labels", action="append", help="label file, e.g. the --out of `judgeman judge`")
+    p.add_argument("--out", default="judgeman-report.html")
+    p.add_argument("--title", default="judgeman report")
 
     p = command("eval", evaluate)
     p.add_argument("--judge", help="model name, e.g. openai/gpt-5-mini")
