@@ -1,7 +1,9 @@
 """Leg 2 fine-tune: build the training file and the exam file for the Kaggle notebook.
 
 Training examples come from runs by four agents that are not in the test set:
-  - 295 steps a person reviewed for wasted / not wasted
+  - 420 steps labeled wasted / not wasted under the rule two labelers agreed on: 300 random
+    steps (100 of them labeled by both people, disagreements settled together) and 120 steps
+    the 9B had flagged
   - planted mistakes with known answers (exact repeat, destructive command, weakened test,
     submitting with the test runs removed)
   - unplanted steps as "nothing wrong here" examples
@@ -31,6 +33,7 @@ from judgeman.schema import Step, read_labels  # noqa: E402
 OUT = Path("finetune")
 WRITER = "qwen/qwen3-235b-a22b-2507"  # open weights, so its text can be trained on freely
 PER_KIND = 120
+PROGRESS_LABELS = ("rule2-human-solo.jsonl", "rule2-human.jsonl", "rule2-agreed.jsonl", "flag2-human.jsonl")
 MAX_CHARS = 14000  # about 3,500 tokens; longer prompts are dropped to fit the free GPU
 # destructive commands for training; none of these appears in the exam's planted set
 TRAIN_RISKY = [
@@ -76,12 +79,17 @@ def examples(rng: random.Random) -> list[dict]:
         if len(SYSTEM) + len(prompt) <= MAX_CHARS:
             out.append({"kind": kind, "prompt": prompt, "verdict": verdict, "hint": hint})
 
-    for x in read_labels(Path("labels/ft-progress.jsonl")):
-        if x.progress is None:
-            continue
-        said = "not wasted: it gave the agent something to use" if x.progress else "wasted"
-        t = by_id[x.trajectory_id]
-        add("reviewed", t, t.steps[x.step], {"progress": x.progress, "risky": False}, f"A person judged this step {said}.")
+    # wasted / not wasted, under the rule two labelers agreed on 2026-10-07. Later files win:
+    # the shared 100 are overridden by the labels the two settled together.
+    reviewed: dict = {}
+    for name in PROGRESS_LABELS:
+        for x in read_labels(Path("labels") / name):
+            if x.progress is not None:
+                reviewed[x.trajectory_id, x.step] = x.progress
+    for (traj_id, index), progress in reviewed.items():
+        said = "not wasted: it gave the agent something it went on to use" if progress else "wasted"
+        t = by_id[traj_id]
+        add("reviewed", t, t.steps[index], {"progress": progress, "risky": False}, f"A person judged this step {said}.")
 
     for kind, (plant, verdict, hint) in PLANTS.items():
         made = 0
