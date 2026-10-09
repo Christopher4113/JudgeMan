@@ -37,7 +37,7 @@ they are reported as their own kind instead).
 
 ## Show HN
 
-**Title:** Show HN: Judgeman – step-level evals for coding agents, with a measured trust number
+**Title:** Show HN: Judgeman – judge every step of a coding agent, and measure the judge
 
 judgeman reads every step of an agent run (Claude Code, OpenAI Agents SDK, anything with OTel
 spans, mini-SWE-agent) and flags the steps that were wasted, repeated, dangerous, or submitted
