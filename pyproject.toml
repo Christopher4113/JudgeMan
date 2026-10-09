@@ -1,6 +1,6 @@
 [project]
 name = "judgeman"
-version = "0.1.0"
+version = "0.1.1"
 description = "Step-level evals for AI agent runs, with a measured trust number for the judge."
 readme = "README.md"
 license = "Apache-2.0"
