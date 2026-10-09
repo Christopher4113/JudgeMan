@@ -13,7 +13,7 @@ from judgeman.judge import CACHE_DIR, PROMPT_VERSION
 from judgeman.schema import read_labels
 
 L = Path("labels")
-TIERS = ("opus", "gemini", "qwen", "qwen-fewshot", "qwen-kaggle-base", "qwen-ft")
+TIERS = ("opus", "gemini", "qwen", "qwen-fewshot", "qwen-kaggle-base", "qwen-ft", "qwen-kaggle-base2", "qwen-ft2")
 CONTEXTS = ("last5", "history", "plan")
 AXIS_OF = {"repeat": "redundant", "unverified": "unverified_completion"}
 
