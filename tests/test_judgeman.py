@@ -492,3 +492,23 @@ def test_gate_fails_on_wasted_steps_only_when_asked(capsys):
         main(["gate", run, "--labels", "labels/examples-judged.jsonl", "--max-wasted", "0"])
     with pytest.raises(ValueError):
         check(trajs, judged, speed=1)
+
+
+def test_provider_out_of_credit_counts_as_budget_reached(tmp_path, monkeypatch):
+    import pytest
+
+    monkeypatch.chdir(tmp_path)
+
+    class Denied(Exception):
+        status_code = 402
+
+    class Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**_):
+                    raise Denied("out of credit")
+
+    t = traj(["ls"])
+    with pytest.raises(judge.BudgetReached):
+        judge.Judge("m", 1.0, client=Client()).judge(t, t.steps[0])

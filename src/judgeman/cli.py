@@ -234,6 +234,14 @@ def judge(args) -> None:
             str(sum("failed_command" in x.flags for x in rows)),
         )  # fmt: skip
     console.print(table)
+    if frontier:
+        answered = sum(x.source == frontier.source for x in labels)
+        if answered < escalated:
+            console.print(
+                f"[red]the frontier judge answered {answered} of {escalated} flagged steps before the cost "
+                "cap or the provider's limit stopped it; the rest carry the rules' verdict. Re-run with a "
+                "higher --max-cost (or more credit): answered steps are cached.[/]"
+            )
     spent = sum(j.spent for j in (small, frontier) if j)
     out = args.out or "<out>"
     console.print(f"spent ${spent:.4f}; see every step with `judgeman show ... --labels {out}`")
