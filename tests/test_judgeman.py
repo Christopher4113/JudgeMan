@@ -438,3 +438,22 @@ def test_layered_judge_escalates_only_flagged_steps(tmp_path, monkeypatch):
     assert [x.source for x in final] == ["layered"] * 6
     assert final[3].redundant is False and final[3].critique == "ok"  # the frontier judge overruled the rule
     assert final[1].flags == ["failed_command"] and final[1].progress is True
+
+
+def test_calibration_scores_each_layer_against_the_human_sample():
+    from judgeman.calibration import advice, pick_sample, score
+
+    def rows(source, verdicts):
+        return [StepLabel(trajectory_id="t", step=i, source=source, progress=v)
+                for i, v in enumerate(verdicts)]  # fmt: skip
+
+    final = rows("layered", [False, False, True, True, True, True, True, True])  # 2 flagged, 6 plain
+    chosen, weights = pick_sample(final, n=4, seed=1)
+    assert len(chosen) == 4 and sum(1 for k in chosen if k[1] < 2) == 2  # half flagged, half not
+    assert weights[chosen[0]] == 1.0 and all(w == 3.0 for k, w in weights.items() if k[1] >= 2)
+    person = rows("human", [False, True, True, True, True, True, True, True])
+    human = {(x.trajectory_id, x.step): x for x in person}
+    judged = {(x.trajectory_id, x.step): x for x in final}
+    r = score(human, judged, weights, "progress")
+    assert r["n"] == 4 and r["caught"] == 1.0 and 0 < r["left_alone"] < 1
+    assert advice({"layered": {"progress": r}})[0].startswith("progress: too few examples")

@@ -317,6 +317,52 @@ def label(args, getch=_getch) -> None:
     console.print(f"{len(done)} steps labeled in {out}")
 
 
+def calibrate(args) -> None:
+    """Label a blind sample of your judged steps, then see how far to trust each layer on your agent."""
+    from .calibration import advice, pick_sample, score
+
+    judged = read_labels(Path(args.judged))
+    final = [x for x in judged if x.source == "layered"]
+    if not final:
+        sys.exit(f"{args.judged} has no layered verdicts; run `judgeman judge ... --out {args.judged}` first")
+    queue_path = Path(args.out).with_suffix(".queue.json")
+    if queue_path.exists():
+        chosen = [tuple(k) for k in json.loads(queue_path.read_text())]
+        _, weights = pick_sample(final, args.n, args.seed)
+        weights = {k: weights.get(k, 1.0) for k in chosen}
+    else:
+        chosen, weights = pick_sample(final, args.n, args.seed)
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        queue_path.write_text(json.dumps([list(k) for k in chosen]))
+    human = {(x.trajectory_id, x.step): x for x in read_labels(Path(args.out))}
+    if any(k not in human for k in chosen):
+        console.print(f"[bold]Calibration:[/] {len(chosen)} of your agent's steps to label, blind. Half "
+                      "were flagged by some layer, half were not; the screen will not say which.\n")
+        ask = argparse.Namespace(path=args.path, results=args.results, out=args.out, task=False, history=60,
+                                 max_output=args.max_output, queue=str(queue_path), source="human")  # fmt: skip
+        label(ask)
+        human = {(x.trajectory_id, x.step): x for x in read_labels(Path(args.out))}
+    sources = {}
+    for x in judged:
+        sources.setdefault(x.source, {})[x.trajectory_id, x.step] = x
+    reports = {name: {a: score(human, rows, weights, a) for a in AXES} for name, rows in sources.items()}
+    table = Table(title=f"How far to trust each layer on your agent ({len(human)} steps labeled)")
+    for col in ("layer", "axis", "problems in sample", "agreement", "kappa", "caught", "left alone"):
+        table.add_column(col)
+    for name, by_axis in reports.items():
+        for axis, r in by_axis.items():
+            if r is None:
+                continue
+            thin = " [yellow]*[/]" if r["problems"] < 5 else ""
+            fmt = lambda v: "-" if v is None else f"{v:.2f}"  # noqa: E731
+            table.add_row(name, axis + thin, str(r["problems"]), fmt(r["agreement"]), fmt(r["kappa"]),
+                          fmt(r["caught"]), fmt(r["left_alone"]))  # fmt: skip
+    console.print(table)
+    console.print("[yellow]* fewer than 5 problem steps in the sample: not enough to measure[/]")
+    for line in advice(reports):
+        console.print(line)
+
+
 def agree(args) -> None:
     gold = read_labels(Path(args.gold))
     other = read_labels(Path(args.other))
@@ -396,6 +442,13 @@ def main(argv: list[str] | None = None) -> None:
 
     p = command("demo", demo, runs=False)
     p.add_argument("--no-pause", action="store_true", help="print every screen without waiting for Enter")
+
+    p = command("calibrate", calibrate)
+    p.add_argument("--judged", required=True, help="the --out file written by `judgeman judge`")
+    p.add_argument("--out", default="labels/calibration.jsonl", help="where your labels go")
+    p.add_argument("-n", type=int, default=50, help="steps to label")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--max-output", type=int, default=3000, help="characters of output shown")
 
     p = command("agree", agree, runs=False)
     p.add_argument("gold", help="JSONL of hand labels")
