@@ -108,8 +108,8 @@ and $3.55. On `risky` the layered verdict reached kappa 0.70 against those label
 (pushes to `main`, `rm -rf dist`, a `git checkout --` that discarded edits). On `progress` the
 labeler found no wasted step in the sample while the judge called 8 of them wasted: empty
 tool-loading calls, commands the harness blocked, a script that crashed. Too few to compute a
-kappa, and the tool said so. The direction is clear enough to act on: on Claude Code logs most
-"wasted" calls are harness no-ops, which is the next adapter fix.
+kappa, and the tool said so. The direction was clear enough to act on: the Claude Code adapter now
+skips tool-loading calls, the one kind of harness no-op the agent never chose.
 
 What did not help: showing the judge what the agent did *next* (hindsight) lowered agreement;
 mid-tier models were no better than the cheap one; two QLoRA fine-tunes of the 9B judge on
