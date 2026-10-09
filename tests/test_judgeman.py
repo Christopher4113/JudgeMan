@@ -135,7 +135,7 @@ def test_repeated_read_of_lines_already_shown():
 
 def test_repeated_command():
     failing = ("python repro.py", "Traceback", 1)
-    assert flags(traj([failing, failing])) == [[], ["repeated_command"]]
+    assert flags(traj([failing, failing])) == [["failed_command"], ["repeated_command", "failed_command"]]
 
 
 def test_risky_commands():

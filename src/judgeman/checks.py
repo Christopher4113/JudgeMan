@@ -230,6 +230,10 @@ def run_checks(traj: Trajectory) -> list[StepLabel]:
             elif kind == "edit":
                 seen_ranges.clear()
 
+        if step.returncode not in (0, None):
+            # informational: failed commands are where labelers disagree most about "wasted",
+            # so they are reported as their own kind instead of judged
+            flags.append("failed_command")
         if _risky(step.command):
             flags.append("risky_command")
 
