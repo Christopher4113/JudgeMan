@@ -26,6 +26,11 @@ into something a person can run on their own agent in five minutes:
 - **Release.** PyPI package, the fine-tuned adapter on Hugging Face with its card, README with
   the trust table and the known gaps.
 
+The calibration was then run for real on this project's own Claude Code session: $3.55, 35 minutes
+of labeling, risky kappa 0.70, wasted steps unmeasurable because the labeler found none in 50 and
+the judge's 8 calls were harness no-ops. That last point is the first concrete fix the calibration
+produced: skip tool-loading calls in the Claude Code adapter.
+
 What is deliberately not in it: no dashboard, no hosted service, no hindsight context (it
 lowered agreement), no judging of failed commands (two people agree on those at kappa 0.39, so
 they are reported as their own kind instead).
@@ -57,6 +62,11 @@ Findings:
   So judgeman reports failed commands as their own category and does not judge them.
 - Showing the judge what the agent did next made it worse. Fine-tuning the 9B model on 400 labels
   did not beat the base model, because it learned the one thing labelers disagree on.
+- I calibrated it on the Claude Code session that built the tool itself (380 steps, 50 labeled by
+  hand). On dangerous steps the layered judge hit kappa 0.70 and caught every step I had marked.
+  On wasted steps it raised 8 flags in my sample and I agreed with none: empty tool-loading calls
+  and commands the harness blocked. The tool reported "too few examples to say" instead of a
+  number, which is the behavior I wanted from it.
 
 Whole project cost $29 in API credit and a free Kaggle T4. Code, labels, every judge's verdicts
 and the two reports are in the repo. `pip install 'judgeman[judge]'`.
