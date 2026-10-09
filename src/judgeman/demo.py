@@ -56,7 +56,8 @@ def _layers(console: Console, traj) -> None:
     asked = 0
     for step, check in zip(traj.steps, run_checks(traj), strict=True):
         key = (traj.id, step.index)
-        flagged = bool(check.flags) or bool(_marks(small.get(key)))
+        # failed_command is informational, it does not by itself send a step to the frontier judge
+        flagged = bool(set(check.flags) - {"failed_command"}) or bool(_marks(small.get(key)))
         asked += flagged
         opus = frontier.get(key) if flagged else None
         why = opus.critique[:200] + "..." if opus and _marks(opus) else ""
