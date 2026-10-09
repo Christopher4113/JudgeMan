@@ -141,7 +141,7 @@ def load_trajectories(path: Path, results: Path | None = None) -> list[Trajector
     if results is None and beside.exists():
         results = beside
     resolved = load_results(results) if results else {}
-    trajs = []
+    trajs: list[Trajectory] = []
     for f in files:
         fmt = _sniff(f)
         if fmt == "mini-swe":
@@ -158,5 +158,6 @@ def load_trajectories(path: Path, results: Path | None = None) -> list[Trajector
             t.resolved = resolved[instance]
         elif sibling.exists():
             t.resolved = json.loads(sibling.read_text()).get("resolved")
-        trajs.append(t)
+        if all(t.id != x.id for x in trajs):  # the same run recorded in two formats counts once
+            trajs.append(t)
     return trajs

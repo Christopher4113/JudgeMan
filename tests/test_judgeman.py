@@ -457,3 +457,16 @@ def test_calibration_scores_each_layer_against_the_human_sample():
     r = score(human, judged, weights, "progress")
     assert r["n"] == 4 and r["caught"] == 1.0 and 0 < r["left_alone"] < 1
     assert advice({"layered": {"progress": r}})[0].startswith("progress: too few examples")
+
+
+def test_report_is_one_html_file_with_every_step(tmp_path):
+    from judgeman.cli import main
+
+    out = tmp_path / "r.html"
+    main(["report", "examples/agents-sdk/offbyone.items.json", "--labels", "labels/examples-judged.jsonl",
+          "--out", str(out)])  # fmt: skip
+    html = out.read_text()
+    run = load_trajectories(Path("examples/agents-sdk/offbyone.items.json"))[0]
+    assert html.count("<tr class=") == len(run.steps)
+    assert "layered" in html and ("tests pass" in html or "tests fail" in html)
+    assert "<script" not in html and "http" not in html.split("<section>")[0]  # offline, no tracking
