@@ -6,6 +6,17 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2", "rich>=13"]
+keywords = ["evals", "agents", "llm-as-judge", "claude-code", "opentelemetry", "swe-bench"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://github.com/Christopher4113/JudgeMan"
+Model = "https://huggingface.co/Christopher4113/judgeman-qwen3.5-9b-judge"
 
 [project.optional-dependencies]
 judge = ["openai>=1.40"]
