@@ -38,11 +38,13 @@ Costs, measured: the small judge is about 27 cents per 1,000 steps, the frontier
 per 1,000 of the steps it sees. A 400-step session runs to about $3.50. Calls are cached, so
 re-running is free.
 
-No key yet? `judgeman demo` shows the whole thing from saved results, and the four recorded runs
-in `examples/agents-sdk/` come with their verdicts:
+No key yet? Clone the repository: the four recorded runs in `examples/agents-sdk/` come with
+their verdicts, and `uv run judgeman demo` replays the study's results from saved files.
 
 ```bash
-judgeman report examples/agents-sdk --labels examples/agents-sdk/judged.jsonl --out report.html
+git clone https://github.com/Christopher4113/JudgeMan && cd JudgeMan && uv sync
+uv run judgeman report examples/agents-sdk --labels examples/agents-sdk/judged.jsonl --out report.html
+uv run judgeman demo
 ```
 
 ## Where your logs are
