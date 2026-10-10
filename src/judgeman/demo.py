@@ -11,7 +11,7 @@ from .agreement import agreement
 from .checks import run_checks
 from .schema import StepLabel, read_labels
 
-L = Path("labels")
+L = Path("study/labels")
 RUNS = Path("runs/20260217_mini-v2.0.0_gpt-5-mini")
 STORY = "django__django-14500"  # the run that submitted an empty patch
 # dollars per 1,000 judged steps, measured on OpenRouter in October 2026
@@ -158,5 +158,5 @@ def demo(args) -> None:
         pause()
     else:
         console.print(f"[yellow]{RUNS} is not here, so the run walkthrough is skipped. "
-                      "Fetch the runs as described in DEMO.md to see it.[/]\n")  # fmt: skip
+                      "Fetch the runs as described in docs/demo.md to see it.[/]\n")  # fmt: skip
     _scoreboard(console)

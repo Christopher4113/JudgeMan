@@ -2,7 +2,7 @@
 
 Gold comparisons use the 150-step subset every tier judged, weighted back to the 516 gold steps
 (60 of 80 suspected repeats, 90 of 436 others). `redundant` uses the 90 strict-rule labels.
-Run: uv run python scripts/leg2_results.py
+Run: uv run python study/scripts/leg2_results.py
 """
 
 import json
@@ -12,7 +12,7 @@ from pathlib import Path
 from judgeman.judge import CACHE_DIR, PROMPT_VERSION
 from judgeman.schema import read_labels
 
-L = Path("labels")
+L = Path("study/labels")
 TIERS = ("opus", "gemini", "qwen", "qwen-fewshot", "qwen-kaggle-base", "qwen-ft", "qwen-kaggle-base2", "qwen-ft2")
 CONTEXTS = ("last5", "history", "plan")
 AXIS_OF = {"repeat": "redundant", "unverified": "unverified_completion"}

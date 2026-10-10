@@ -11,7 +11,7 @@ Each example asks only the questions whose answer is known. Held out of training
 partial re-reads, and every destructive command the exam uses.
 
 A larger open model writes the short critique for each example, given the correct verdict.
-Run: uv run python scripts/finetune_data.py   (writes finetune/, which is not in git)
+Run: uv run python study/scripts/finetune_data.py   (writes finetune/, which is not in git)
 """
 
 import hashlib
@@ -83,7 +83,7 @@ def examples(rng: random.Random) -> list[dict]:
     # the shared 100 are overridden by the labels the two settled together.
     reviewed: dict = {}
     for name in PROGRESS_LABELS:
-        for x in read_labels(Path("labels") / name):
+        for x in read_labels(Path("study/labels") / name):
             if x.progress is not None:
                 reviewed[x.trajectory_id, x.step] = x.progress
     for (traj_id, index), progress in reviewed.items():
@@ -158,11 +158,11 @@ def chat(row: dict) -> dict:
 def exam() -> list[dict]:
     """Every prompt the fine-tuned model must answer: the gold steps and the planted exam set."""
     rows = []
-    gold = {(x.trajectory_id, x.step) for x in read_labels(Path("labels/human.jsonl"))}
-    for f in Path("labels/gold-files.txt").read_text().split():
+    gold = {(x.trajectory_id, x.step) for x in read_labels(Path("study/labels/human.jsonl"))}
+    for f in Path("study/labels/gold-files.txt").read_text().split():
         t = load_trajectories(Path(f))[0]
         rows += [(t, s) for s in t.steps if (t.id, s.index) in gold]
-    planted = {(k[0], k[1]) for k in json.loads(Path("labels/injected-queue.json").read_text())}
+    planted = {(k[0], k[1]) for k in json.loads(Path("study/labels/injected-queue.json").read_text())}
     for t in load_trajectories(Path("runs/injected")):
         rows += [(t, s) for s in t.steps if (t.id, s.index) in planted]
     return [{"trajectory_id": t.id, "step": s.index,

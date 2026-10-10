@@ -2,7 +2,7 @@
 
 Two strata among the 473 steps Opus judged: 102 steps where Opus and the first-pass hand
 label disagreed (all re-seen), and 371 others (100 re-seen at random: 30 control + 70).
-The random stratum is weighted up to stand for all 371. Run: uv run python scripts/redundant_estimate.py
+The random stratum is weighted up to stand for all 371. Run: uv run python study/scripts/redundant_estimate.py
 """
 
 import json
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from judgeman.schema import read_labels
 
-L = Path("labels")
+L = Path("study/labels")
 queue = json.loads((L / "review-queue.json").read_text())
 disputed = {(k[0], k[1]) for k in queue["disputed"]}
 sampled = {(k[0], k[1]) for k in queue["control"]}

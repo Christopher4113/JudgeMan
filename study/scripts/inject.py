@@ -4,7 +4,7 @@ Each output run is a real run with exactly one planted mistake. The planted step
 "yes" on one axis, so no hand labeling is needed. This measures recall only: how often a judge
 catches the mistake. False alarms are measured on the real gold set.
 
-Run: uv run python scripts/inject.py   (writes runs/injected/ and labels/injected*.json*)
+Run: uv run python study/scripts/inject.py   (writes runs/injected/ and study/labels/injected*.json*)
 """
 
 import json
@@ -143,9 +143,9 @@ def main() -> None:
                                   **{axis: True}))  # fmt: skip
             made[kind] += 1
     (OUT / "per_instance_details.json").write_text(json.dumps(results))
-    write_labels(Path("labels/injected.jsonl"), gold)
+    write_labels(Path("study/labels/injected.jsonl"), gold)
     queue = [[g.trajectory_id, g.step] for g in gold]
-    Path("labels/injected-queue.json").write_text(json.dumps(queue))
+    Path("study/labels/injected-queue.json").write_text(json.dumps(queue))
     print(f"{len(gold)} injected runs from {len(sources)} real runs:", made)
 
 
