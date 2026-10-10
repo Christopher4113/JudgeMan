@@ -60,6 +60,32 @@ A step is one tool call and its result. The format is sniffed from the file, so 
 them. Pass or fail per run comes from a `<run>.result.json` beside the log (`{"resolved": true}`)
 or a `per_instance_details.json`; without it the outcome axis is skipped.
 
+### Another format?
+
+A run is a `Trajectory` of `Step`s, and every command works on that. Build it yourself and hand it
+to the same pipeline:
+
+```python
+from judgeman import Step, Trajectory, judge_runs, gate, render, write_labels
+from judgeman.judge import Judge
+from pathlib import Path
+
+run = Trajectory(id="run-1", task="fix the failing test", resolved=True, steps=[
+    Step(index=0, thought="look first", command="cat app.py", output="...", returncode=0),
+    Step(index=1, thought="run it", command="pytest -q", output="1 passed", returncode=0),
+])
+labels, final, _ = judge_runs([run], Judge("qwen/qwen3.5-9b", 0.5, thinking=False),
+                              Judge("anthropic/claude-opus-5.5", 1.0))
+Path("report.html").write_text(render([run], labels))
+assert not gate([run], labels)        # [] when nothing dangerous or unverified
+write_labels(Path("judged.jsonl"), labels)
+```
+
+`returncode` is the one field the rules lean on: non-zero means the command failed. Pass `None`
+for either judge to skip that layer; `run_checks(run)` is the free rules alone. If your agent
+emits OpenTelemetry spans (OpenInference or the GenAI conventions), export them and skip all of
+this.
+
 ## What it judges, and how far to trust it
 
 Five yes/no axes per step: `progress`, `redundant`, `risky`, `unverified_completion`, and
@@ -99,7 +125,7 @@ help, and the calibration run; the three PDF reports in [reports/](reports/) hav
 | | |
 |---|---|
 | `src/judgeman/` | the package: one adapter per format, `checks.py`, `judge.py`, `layered.py`, `calibration.py`, `report.py`, `gate.py`, `cli.py` |
-| `examples/agents-sdk/` | four recorded runs in two formats, with their layered verdicts |
+| `examples/agents-sdk/` | four recorded runs, each in Agents SDK and OTel form, with their layered verdicts |
 | `docs/` | [axes and rules](docs/axes.md), [results](docs/results.md), [demo script](docs/demo.md), [launch notes](docs/launch.md) |
 | `reports/` | the Leg 1, 2 and 3 reports as PDF |
 | `study/` | every hand label, every judge's verdict, the scripts that produce the tables, the fine-tune notebook; see [study/README.md](study/README.md) |

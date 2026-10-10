@@ -1,0 +1,15 @@
+direction: right
+vars: { d2-config: { theme-id: 0 } }
+classes: {
+  blue: { style: { fill: "#0b5394"; font-color: "#ffffff"; stroke: "#0b5394"; border-radius: 4 } }
+  person: { shape: person; style: { fill: "#e07b39"; stroke: "#a85a22" } }
+}
+opus: "Opus 5.5" { class: blue }
+qwen: "Qwen 3.5 9B" { class: blue }
+l1: "Labeler 1" { class: person }
+l2: "Labeler 2" { class: person }
+opus -> l1: "0.83"
+opus -> l2: "0.74"
+qwen -> l1: "0.57"
+qwen -> l2: "0.50"
+l1 <-> l2: "kappa 0.68\n(0.39 on failed commands)"

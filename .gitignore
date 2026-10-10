@@ -9,3 +9,4 @@ runs/
 .env
 finetune/
 .DS_Store
+judgeman-paper.zip

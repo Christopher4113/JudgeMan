@@ -116,10 +116,12 @@ def load_results(path: Path) -> dict[str, bool]:
 
 
 def _sniff(path: Path) -> str:
-    """Which log format a file holds: mini-swe, claude-code, agents-sdk or otel."""
+    """Which log format a file holds: mini-swe, claude-code, agents-sdk, otel, or labels (skipped)."""
     head = path.read_text()[:4000] if path.suffix == ".jsonl" else path.read_text()
     if path.suffix == ".jsonl":
         first = head.split("\n", 1)[0]
+        if '"trajectory_id"' in first and '"source"' in first:  # a judgeman --out file beside the logs
+            return "labels"
         return "otel" if '"attributes"' in first and '"context"' in first else "claude-code"
     data = json.loads(head)
     if isinstance(data, dict) and "resourceSpans" in data:
@@ -144,6 +146,8 @@ def load_trajectories(path: Path, results: Path | None = None) -> list[Trajector
     trajs: list[Trajectory] = []
     for f in files:
         fmt = _sniff(f)
+        if fmt == "labels":
+            continue
         if fmt == "mini-swe":
             t = parse_trajectory(json.loads(f.read_text()), fallback_id=f.name.split(".")[0])
         elif fmt == "claude-code":

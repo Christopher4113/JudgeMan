@@ -74,6 +74,21 @@ def test_load_folder_merges_results(tmp_path):
     assert load_trajectories(tmp_path)[0].resolved is True
 
 
+def test_label_file_beside_the_logs_is_not_a_run(tmp_path):
+    t = traj(["ls"])
+    (tmp_path / "demo-1.traj.json").write_text(json.dumps({"instance_id": t.id, "messages": [], "info": {}}))
+    label = StepLabel(trajectory_id=t.id, step=0, source="layered")
+    (tmp_path / "judged.jsonl").write_text(label.model_dump_json())
+    assert [x.id for x in load_trajectories(tmp_path)] == [t.id]
+
+
+def test_example_folder_counts_each_run_once():
+    """Every example run is recorded in two formats; the report must not show it twice."""
+    assert sorted(t.id for t in load_trajectories(Path("examples/agents-sdk"))) == [
+        f"{n}@openai/gpt-5-mini" for n in ("default", "offbyone", "parse", "strip")
+    ]
+
+
 @pytest.mark.parametrize(
     "command,kind",
     [

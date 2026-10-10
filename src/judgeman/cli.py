@@ -103,6 +103,8 @@ def show(args) -> None:
         for x in read_labels(Path(path)):
             if x.source != "checks":
                 sources.setdefault(x.source, {})[x.trajectory_id, x.step] = x
+    if "layered" in sources:  # the final verdict first, so its critique is the one shown
+        sources = {"layered": sources.pop("layered"), **sources}
     for t in _load(args):
         table = Table(title=f"{t.id}  {t.exit_status}  tests: {_outcome(t)}", show_lines=bool(sources))
         for col in ("step", "command", "checks", *(s.rsplit("/", 1)[-1] for s in sources)):
@@ -154,6 +156,7 @@ def gate(args) -> None:
 
 
 def evaluate(args) -> None:
+    """One judge (or the rules alone) on every step, for studies; `judge` is the layered pipeline."""
     trajs = _load(args)
     labels = [x for t in trajs for x in run_checks(t)]
     table = Table(title=f"{len(trajs)} runs, {len(labels)} steps")
@@ -398,6 +401,7 @@ def calibrate(args) -> None:
 
 
 def agree(args) -> None:
+    """Cohen's kappa, true-positive and true-negative rate of one label file against another."""
     gold = read_labels(Path(args.gold))
     other = read_labels(Path(args.other))
     for source in sorted({x.source for x in other}):
@@ -429,7 +433,8 @@ def main(argv: list[str] | None = None) -> None:
         p = sub.add_parser(name, help=func.__doc__)
         p.set_defaults(func=func)
         if runs:
-            p.add_argument("path", nargs="+", help=".traj.json files or folders of them")
+            p.add_argument("path", nargs="+", help="log files or folders of them: Claude Code sessions, "
+                           "Agents SDK items, OTel spans, mini-SWE-agent trajectories")  # fmt: skip
             p.add_argument("--results", help="per_instance_details.json or results.json")
         return p
 
