@@ -142,6 +142,11 @@ def _scoreboard(console: Console) -> None:
 
 def demo(args) -> None:
     """Walk through the idea using saved results: no API key, no network."""
+    if not (L / "human.jsonl").exists():
+        raise SystemExit(
+            "judgeman demo replays the study's saved labels, which ship with the source, not the package. "
+            "Run it from a checkout: git clone https://github.com/Christopher4113/JudgeMan"
+        )
     console = Console()
 
     def pause():
