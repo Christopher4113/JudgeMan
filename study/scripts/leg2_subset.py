@@ -3,7 +3,7 @@ of them that get a fresh hand label for `redundant` under the strict rule.
 
 Half of each list is steps that some source once called a repeat, so there are enough yes
 answers to score; the rest is random. The stratum of every step is saved for weighting.
-Run: uv run python scripts/leg2_subset.py
+Run: uv run python study/scripts/leg2_subset.py
 """
 
 import json
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from judgeman.schema import read_labels
 
-L = Path("labels")
+L = Path("study/labels")
 gold = {(x.trajectory_id, x.step) for x in read_labels(L / "human.jsonl")}
 suspected = set()
 for name in ("human", "checks", "judge-claude-opus-5.5", "judge-claude-opus-5.5-deepseek",

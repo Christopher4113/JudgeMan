@@ -27,16 +27,19 @@ judgeman = "judgeman.cli:main"
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
 
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "tests", "examples", "README.md", "LICENSE"]  # the study data stays on GitHub
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 110
-extend-exclude = ["notebooks"]  # written for Kaggle, not linted here
+extend-exclude = ["study/notebooks"]  # written for Kaggle, not linted here
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-"scripts/*" = ["E501"]  # one-off study scripts
+"study/scripts/*" = ["E501"]  # one-off study scripts

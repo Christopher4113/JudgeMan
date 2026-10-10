@@ -154,9 +154,15 @@ class Judge:
         if self.client is None:
             from openai import OpenAI
 
+            key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY")
+            if not key:
+                raise SystemExit(
+                    "No API key. Set OPENROUTER_API_KEY (https://openrouter.ai/keys), or OPENAI_API_KEY "
+                    "with JUDGEMAN_BASE_URL for another OpenAI-compatible endpoint such as Ollama."
+                )
             self.client = OpenAI(
                 base_url=os.environ.get("JUDGEMAN_BASE_URL", "https://openrouter.ai/api/v1"),
-                api_key=os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY"),
+                api_key=key,
                 max_retries=3,  # rate limits are common with parallel calls; the SDK backs off
                 timeout=90,  # a hung request must not hold up the whole run
             )

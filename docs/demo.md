@@ -1,5 +1,7 @@
 # Demo script (about 3 minutes)
 
+Paths are relative to a checkout of the repository.
+
 ## The one-command version
 
 ```bash
@@ -33,7 +35,7 @@ uv run judgeman fetch 20260217_mini-v2.0.0_gpt-5-mini -n 20
 ## 1. The outcome-only view hides everything
 
 ```bash
-uv run judgeman eval $(grep gpt-5-mini labels/review-files.txt)
+uv run judgeman eval $(grep gpt-5-mini study/labels/review-files.txt)
 ```
 
 16 runs, pass or fail. Say: "This is what a normal eval tells you. Two runs with `pass` look
@@ -43,7 +45,7 @@ identical. So do two with `fail`."
 
 ```bash
 uv run judgeman show runs/20260217_mini-v2.0.0_gpt-5-mini/django__django-14500.traj.json \
-  --flagged --labels labels/human.jsonl --labels labels/judge-claude-opus-5.5.jsonl
+  --flagged --labels study/labels/human.jsonl --labels study/labels/judge-claude-opus-5.5.jsonl
 ```
 
 Say: "The agent staged its change with `git add -A`, then built its patch with a plain
@@ -55,8 +57,8 @@ Every one of the 23 GPT-5 mini runs makes the same staging mistake; most recover
 ## 3. Can you trust the judge? Measure it
 
 ```bash
-uv run judgeman agree labels/human.jsonl labels/judge-claude-opus-5.5.jsonl
-uv run judgeman agree labels/human.jsonl labels/judge-gemini-3.5-flash-lite.jsonl
+uv run judgeman agree study/labels/human.jsonl study/labels/judge-claude-opus-5.5.jsonl
+uv run judgeman agree study/labels/human.jsonl study/labels/judge-gemini-3.5-flash-lite.jsonl
 ```
 
 Say: "516 steps labeled by hand. The frontier judge reaches kappa 0.63 on whether a step made
@@ -81,5 +83,5 @@ surfaced it before anyone trained a model on those labels."
 Caveats to state if asked: one labeler; the Opus `progress` number comes after a review of the
 steps where Opus and the labeler disagreed, with a blind control showing those labels are stable
 (1 of 30 changed); the `redundant` numbers use only steps labeled with the run history on screen
-(`scripts/redundant_estimate.py`); `risky`, `unverified_completion` and
+(`study/scripts/redundant_estimate.py`); `risky`, `unverified_completion` and
 `outcome_process_mismatch` have too few examples to score.

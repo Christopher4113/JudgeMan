@@ -1,7 +1,7 @@
 """Turn the Kaggle notebook's exam replies into label files that leg2_results.py reads.
 
 Put exam-replies.jsonl (fine-tuned) and exam-replies-base.jsonl (same model, untrained, same
-4-bit setup) into finetune/, then: uv run python scripts/finetune_score.py
+4-bit setup) into finetune/, then: uv run python study/scripts/finetune_score.py
 """
 
 import json
@@ -12,7 +12,7 @@ from judgeman.judge import parse_verdict
 from judgeman.schema import write_labels
 
 steps = {}
-for f in Path("labels/gold-files.txt").read_text().split() + ["runs/injected"]:
+for f in Path("study/labels/gold-files.txt").read_text().split() + ["runs/injected"]:
     for t in load_trajectories(Path(f)):
         steps |= {(t.id, s.index): (t, s) for s in t.steps}
 
@@ -38,7 +38,7 @@ for source, tier in RUNS:
             continue
         labels["injected" if "+" in t.id.split("@")[0] else "gold"].append(label)
     for kind, rows in labels.items():
-        write_labels(Path("labels/leg2") / f"{tier}-last5-{kind}.jsonl", rows)
+        write_labels(Path("study/labels/leg2") / f"{tier}-last5-{kind}.jsonl", rows)
     seconds.sort()
     print(f"{tier}: {len(labels['gold'])} gold + {len(labels['injected'])} planted verdicts, "
           f"{bad} unusable, median {seconds[len(seconds) // 2]}s per step on the Kaggle GPU")

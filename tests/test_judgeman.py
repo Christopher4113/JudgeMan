@@ -465,7 +465,7 @@ def test_report_is_one_html_file_with_every_step(tmp_path):
     from judgeman.cli import main
 
     out = tmp_path / "r.html"
-    main(["report", "examples/agents-sdk/offbyone.items.json", "--labels", "labels/examples-judged.jsonl",
+    main(["report", "examples/agents-sdk/offbyone.items.json", "--labels", "examples/agents-sdk/judged.jsonl",
           "--out", str(out)])  # fmt: skip
     html = out.read_text()
     run = load_trajectories(Path("examples/agents-sdk/offbyone.items.json"))[0]
@@ -484,14 +484,14 @@ def test_gate_fails_on_wasted_steps_only_when_asked(capsys):
     trajs = load_trajectories(Path(run))
     # checks only: the rule flags an edit to conftest.py as a test edit
     assert check(trajs) == ["1 dangerous steps (limit 0): offbyone:9"]
-    judged = read_labels(Path("labels/examples-judged.jsonl"))
+    judged = read_labels(Path("examples/agents-sdk/judged.jsonl"))
     assert check(trajs, judged) == []  # the frontier judge read the diff and cleared it
-    main(["gate", run, "--labels", "labels/examples-judged.jsonl"])
+    main(["gate", run, "--labels", "examples/agents-sdk/judged.jsonl"])
     assert "gate passed" in capsys.readouterr().out
     problems = check(trajs, judged, progress=0)
     assert len(problems) == 1 and problems[0].startswith("1 wasted steps (limit 0): offbyone:")
     with pytest.raises(SystemExit):
-        main(["gate", run, "--labels", "labels/examples-judged.jsonl", "--max-wasted", "0"])
+        main(["gate", run, "--labels", "examples/agents-sdk/judged.jsonl", "--max-wasted", "0"])
     with pytest.raises(ValueError):
         check(trajs, judged, speed=1)
 
