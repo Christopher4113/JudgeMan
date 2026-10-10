@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-10-10)
 - A judgeman label file (`--out`) sitting beside the logs is no longer read as a run.
 - The example runs count once each; their OTel copies now name the same model as the Agents SDK copies.
 - `judgeman show` puts the layered verdict and its critique first, as the HTML report does.
