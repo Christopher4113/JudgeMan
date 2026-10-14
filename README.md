@@ -9,7 +9,11 @@ match a person's: on public runs, and on your own agent after a 20-minute calibr
 Works on logs you already have: **Claude Code** sessions, **OpenAI Agents SDK** sessions,
 **OpenTelemetry** traces, **mini-SWE-agent** trajectories.
 
+Paper: [doi:10.5281/zenodo.23354648](https://doi.org/10.5281/zenodo.23354648). Fine-tuned judge: [Christopher4113/judgeman-qwen3.5-9b-judge](https://huggingface.co/Christopher4113/judgeman-qwen3.5-9b-judge) on Hugging Face. Apache-2.0.
+
 ## Setup
+
+Needs Python 3.11 or newer.
 
 ```bash
 pip install 'judgeman[judge]'        # or: uv tool install 'judgeman[judge]'
@@ -236,5 +240,6 @@ uv sync --extra judge
 uv run ruff check . && uv run pytest -q
 ```
 
+Paper: [doi:10.5281/zenodo.23354648](https://doi.org/10.5281/zenodo.23354648).
 Fine-tuned judge adapter: [Christopher4113/judgeman-qwen3.5-9b-judge](https://huggingface.co/Christopher4113/judgeman-qwen3.5-9b-judge).
 Changes: [CHANGELOG.md](CHANGELOG.md). Apache-2.0.
