@@ -229,7 +229,7 @@ help, and the calibration run; the three PDF reports in [reports/](reports/) hav
 |---|---|
 | `src/judgeman/` | the package: one adapter per format, `checks.py`, `judge.py`, `layered.py`, `calibration.py`, `report.py`, `gate.py`, `cli.py` |
 | `examples/agents-sdk/` | four recorded runs, each in Agents SDK and OTel form, with their layered verdicts |
-| `docs/` | [axes and rules](docs/axes.md), [results](docs/results.md), [demo script](docs/demo.md), [launch notes](docs/launch.md) |
+| `docs/` | [axes and rules](docs/axes.md), [results](docs/results.md), [demo script](docs/demo.md) |
 | `reports/` | the Leg 1, 2 and 3 reports as PDF |
 | `study/` | every hand label, every judge's verdict, the scripts that produce the tables, the fine-tune notebook; see [study/README.md](study/README.md) |
 
