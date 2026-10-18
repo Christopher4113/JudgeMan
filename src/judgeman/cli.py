@@ -107,16 +107,21 @@ def show(args) -> None:
         sources = {"layered": sources.pop("layered"), **sources}
     for t in _load(args):
         table = Table(title=f"{t.id}  {t.exit_status}  tests: {_outcome(t)}", show_lines=bool(sources))
-        for col in ("step", "command", "checks", *(s.rsplit("/", 1)[-1] for s in sources)):
+        priced = any(s.tokens is not None for s in t.steps)
+        cols = ("step", "command", *(["tokens"] if priced else []), "checks",
+                *(s.rsplit("/", 1)[-1] for s in sources))  # fmt: skip
+        for col in cols:
             table.add_column(col, overflow="fold")
         if sources:
             table.add_column("why", overflow="fold", ratio=1)
+        flagged_tokens = 0
         for step, label in zip(t.steps, run_checks(t), strict=True):
             command = escape(step.command.split("\n", 1)[0][:90] or "(no valid command)")
             if step.returncode not in (0, None):
                 command += " [red](failed)[/]"
             # steps count from 0 here because the judges' critiques refer to them that way
-            row = [str(step.index), command, f"[yellow]{', '.join(label.flags)}[/]"]
+            row = [str(step.index), command, *([f"{step.tokens or ''}"] if priced else []),
+                   f"[yellow]{', '.join(label.flags)}[/]"]  # fmt: skip
             why, flagged = "", bool(label.flags)
             for rows in sources.values():
                 verdict = rows.get((t.id, step.index))
@@ -128,7 +133,12 @@ def show(args) -> None:
                     why = f"[dim]{escape(text[:220] + ('...' if len(text) > 220 else ''))}[/]"
             if flagged or not args.flagged:
                 table.add_row(*row, *([why] if sources else []))
+            flagged_tokens += (step.tokens or 0) if flagged else 0
         console.print(table)
+        if priced:
+            total = sum(s.tokens or 0 for s in t.steps)
+            console.print(f"flagged steps: {flagged_tokens:,} of {total:,} tokens "
+                          f"({100 * flagged_tokens / total:.0f}%)\n" if total else "")  # fmt: skip
 
 
 def report(args) -> None:

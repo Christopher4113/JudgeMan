@@ -46,6 +46,12 @@ def pseudo_command(name: str, args: dict) -> str:
     return f"{name} {short}"
 
 
+def _tokens(message: dict) -> int | None:
+    u = message.get("usage") or {}
+    keys = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+    return sum(int(u.get(k) or 0) for k in keys) if u else None
+
+
 def parse_session(lines: list[dict], session_id: str) -> Trajectory:
     results: dict[str, dict] = {}
     for row in lines:
@@ -54,6 +60,7 @@ def parse_session(lines: list[dict], session_id: str) -> Trajectory:
                 results[block.get("tool_use_id")] = block
     steps: list[Step] = []
     task, model = "", ""
+    charged: set[str] = set()  # message ids whose usage is already on a step
     for row in lines:
         if row.get("isSidechain") or row.get("type") not in ("user", "assistant"):
             continue
@@ -67,6 +74,8 @@ def parse_session(lines: list[dict], session_id: str) -> Trajectory:
             continue
         model = model or str(message.get("model") or "")
         thought = _text(content).strip()
+        mid = message.get("id") or row.get("uuid")
+        tokens = None if mid in charged else _tokens(message)
         for block in content if isinstance(content, list) else []:
             if not (isinstance(block, dict) and block.get("type") == "tool_use"):
                 continue
@@ -82,8 +91,11 @@ def parse_session(lines: list[dict], session_id: str) -> Trajectory:
                     command=pseudo_command(str(block.get("name")), block.get("input") or {}),
                     output=output,
                     returncode=1 if failed else 0,
+                    tokens=tokens,
                 )
             )
+            charged.add(mid)
+            tokens = None
     return Trajectory(id=f"{session_id}@{model}" if model else session_id, task=task, steps=steps,
                       exit_status="ended", model=model)  # fmt: skip
 

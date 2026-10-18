@@ -15,6 +15,9 @@ class Step(BaseModel):
     output: str = ""
     returncode: int | None = None
     is_submit: bool = False
+    # tokens of the model call that produced this step (input + output), so flagged steps can be
+    # priced. A call that made several tool calls charges the first; None when the log has none.
+    tokens: int | None = None
 
 
 class Trajectory(BaseModel):

@@ -529,3 +529,61 @@ def test_provider_out_of_credit_counts_as_budget_reached(tmp_path, monkeypatch):
     t = traj(["ls"])
     with pytest.raises(judge.BudgetReached):
         judge.Judge("m", 1.0, client=Client()).judge(t, t.steps[0])
+
+
+def test_tokens_come_from_the_model_call_that_made_the_step():
+    """Usage lives on the LLM span (OTel) or on every row of an assistant message (Claude Code).
+    It is charged once, to the first tool step that call produced; logs without it leave None."""
+    from judgeman.claude_code import parse_session
+    from judgeman.otel import parse_spans
+
+    llm = lambda i, **usage: {"name": "chat", "start_time": str(i), "attributes": {  # noqa: E731
+        "openinference.span.kind": "LLM", **usage}}
+    tool = lambda i, cmd: {"name": "t", "start_time": str(i), "attributes": {  # noqa: E731
+        "openinference.span.kind": "TOOL", "tool.name": "run_bash", "input.value": f'{{"command": "{cmd}"}}'}}
+    spans = [
+        llm(1, **{"llm.token_count.prompt": 100, "llm.token_count.completion": 20}),
+        tool(2, "ls"), tool(3, "pwd"),  # one call, two tool calls: the first is charged
+        llm(4, **{"gen_ai.usage.input_tokens": 7, "gen_ai.usage.output_tokens": 3}),
+        tool(5, "cat a"),
+        llm(6), tool(7, "cat b"),  # no usage on the span
+    ]  # fmt: skip
+    assert [s.tokens for s in parse_spans(spans, "r").steps] == [120, None, 10, None]
+
+    usage = {"input_tokens": 1, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 3,
+             "output_tokens": 4}  # fmt: skip
+    def row(kind, content, mid="m1"):
+        return {"type": kind, "isSidechain": False, "uuid": mid, "message": {
+            "role": kind, "id": mid, "usage": usage, "content": content}}  # fmt: skip
+    tool_use = lambda i: {"type": "tool_use", "id": i, "name": "Bash", "input": {"command": i}}  # noqa: E731
+    lines = [
+        row("user", "task"),
+        row("assistant", [{"type": "text", "text": "hm"}]),  # Claude Code writes one row per block,
+        row("assistant", [tool_use("ls")]),  # all carrying the same usage
+        row("assistant", [tool_use("pwd")]),
+        row("user", [{"type": "tool_result", "tool_use_id": "ls", "content": ""}]),
+        row("assistant", [tool_use("cat a")], mid="m2"),
+    ]
+    assert [s.tokens for s in parse_session(lines, "s").steps] == [10, None, 10]
+
+
+def test_show_and_report_price_the_flagged_steps(tmp_path, capsys):
+    from judgeman.report import render
+
+    t = traj(["ls", "cat a.py", "cat a.py", SUBMIT])
+    for s, n in zip(t.steps, (10, 20, 30, 40), strict=True):
+        s.tokens = n
+    assert "30 of 100 tokens on flagged steps (30%)" in render([t], [])  # the repeated read
+    llm = lambda i, n: {"name": "chat", "start_time": str(i), "context": {}, "attributes": {  # noqa: E731
+        "openinference.span.kind": "LLM", "llm.token_count.prompt": n}}  # "context" is how the sniffer knows
+    tool = lambda i, cmd: {"name": "t", "start_time": str(i), "attributes": {  # noqa: E731
+        "openinference.span.kind": "TOOL", "tool.name": "run_bash",
+        "input.value": json.dumps({"command": cmd})}}
+    spans = [llm(1, 10), tool(2, "ls"), llm(3, 20), tool(4, "cat a.py"), llm(5, 30), tool(6, "cat a.py")]
+    path = tmp_path / "r.spans.jsonl"
+    path.write_text("\n".join(json.dumps(s) for s in spans))
+    cli.main(["show", str(path)])
+    out = capsys.readouterr().out
+    assert "tokens" in out and "flagged steps: 30 of 60 tokens (50%)" in out  # the repeated read
+    cli.main(["show", "examples/agents-sdk/offbyone.items.json"])  # no usage in the log: no column, no line
+    assert "tokens" not in capsys.readouterr().out

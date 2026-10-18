@@ -35,15 +35,23 @@ def _outcome(t: Trajectory) -> str:
     return '<span class="pass">tests pass</span>' if t.resolved else '<span class="fail">tests fail</span>'
 
 
+def _tokens_note(t: Trajectory, flagged: int) -> str:
+    total = sum(s.tokens or 0 for s in t.steps)
+    if not total:
+        return ""
+    return f" · {flagged:,} of {total:,} tokens on flagged steps ({100 * flagged / total:.0f}%)"
+
+
 def _run(t: Trajectory, sources: dict[str, dict[tuple[str, int], StepLabel]]) -> str:
     checks = run_checks(t)
-    rows, flagged_steps = [], 0
+    rows, flagged_steps, flagged_tokens = [], 0, 0
     for step, check in zip(t.steps, checks, strict=True):
         key = (t.id, step.index)
         verdicts = [(name, rows_.get(key)) for name, rows_ in sources.items()]
         marks = {name: _marks(v) if v else None for name, v in verdicts}
         flagged = bool(check.flags) or any(marks.values())
         flagged_steps += flagged
+        flagged_tokens += (step.tokens or 0) if flagged else 0
         why = next((v.critique for _, v in verdicts if v and _marks(v) and v.critique), "")
         first = escape(step.command.split("\n", 1)[0][:120]) or '<span class="dim">(no valid command)</span>'
         rc = "" if step.returncode in (0, None) else f' <span class="fail">(exit {step.returncode})</span>'
@@ -66,7 +74,8 @@ def _run(t: Trajectory, sources: dict[str, dict[tuple[str, int], StepLabel]]) ->
     task = escape(" ".join(t.task.split())[:600])
     return (
         f"<h2 id={escape(t.id, quote=True)!r}>{escape(t.id)}</h2>"
-        f"<p>{_outcome(t)} · {len(t.steps)} steps · {flagged_steps} flagged · {escape(t.exit_status)}</p>"
+        f"<p>{_outcome(t)} · {len(t.steps)} steps · {flagged_steps} flagged{_tokens_note(t, flagged_tokens)}"
+        f" · {escape(t.exit_status)}</p>"
         f"<details><summary>task</summary><pre>{task}</pre></details>"
         f"<table><tr>{head}</tr>{''.join(rows)}</table>"
     )

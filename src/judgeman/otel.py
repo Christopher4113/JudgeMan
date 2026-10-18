@@ -60,6 +60,16 @@ def _llm_reply(a: dict) -> str:
     return "" if out is None or str(out).startswith(("[", "{")) else str(out)[:2000]
 
 
+def _tokens(a: dict) -> int | None:
+    for prompt, completion in (
+        ("llm.token_count.prompt", "llm.token_count.completion"),  # OpenInference
+        ("gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"),  # OTel GenAI
+    ):
+        if prompt in a or completion in a:
+            return int(a.get(prompt) or 0) + int(a.get(completion) or 0)
+    return None
+
+
 def _first_user(a: dict) -> str:
     for i in range(8):
         if a.get(f"llm.input_messages.{i}.message.role") == "user":
@@ -70,13 +80,13 @@ def _first_user(a: dict) -> str:
 def parse_spans(data, run_id: str) -> Trajectory:
     spans = sorted(_flatten(data), key=lambda s: str(s["start"]))
     steps: list[Step] = []
-    task, model, thought = "", "", ""
+    task, model, thought, tokens = "", "", "", None
     for s in spans:
         a = s["attributes"]
         if _is_llm(a):
             model = model or str(a.get("llm.model_name") or a.get("gen_ai.request.model") or "")
             task = task or _first_user(a) or str(a.get("gen_ai.prompt") or "")
-            thought = _llm_reply(a)
+            thought, tokens = _llm_reply(a), _tokens(a)
         elif _is_tool(a):
             name = str(a.get("tool.name") or a.get("gen_ai.tool.name") or s["name"])
             raw = a.get("input.value") or a.get("gen_ai.tool.call.arguments") or "{}"
@@ -93,9 +103,10 @@ def parse_spans(data, run_id: str) -> Trajectory:
                     command=command_for(name, args),
                     output=RETURNCODE.sub("", output, count=1).strip() if m else output,
                     returncode=int(m[1]) if m else 0,
+                    tokens=tokens,
                 )
             )
-            thought = ""
+            thought, tokens = "", None
     return Trajectory(id=f"{run_id}@{model}" if model else run_id, task=task, steps=steps,
                       exit_status="ended", model=model)  # fmt: skip
 
