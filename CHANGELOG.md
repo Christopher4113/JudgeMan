@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 (2026-10-18)
 - Steps carry the token count of the model call that made them, read from OTel spans and Claude Code sessions. `show` and `report` price the flagged steps: how many of the run's tokens went to them.
 
 ## 0.1.2 (2026-10-10)
