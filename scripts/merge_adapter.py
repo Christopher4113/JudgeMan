@@ -10,7 +10,9 @@ BASE = "unsloth/Qwen3.5-9B"
 ADAPTER = "Christopher4113/judgeman-qwen3.5-9b-judge"
 OUT = "Christopher4113/judgeman-qwen3.5-9b-judge-merged"
 
-model = Qwen3_5ForConditionalGeneration.from_pretrained(BASE, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
+model = Qwen3_5ForConditionalGeneration.from_pretrained(
+    BASE, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True
+)
 model = PeftModel.from_pretrained(model, ADAPTER).merge_and_unload()
 model.push_to_hub(OUT, max_shard_size="5GB")  # transformers 5 always writes safetensors
 AutoProcessor.from_pretrained(BASE).push_to_hub(OUT)
